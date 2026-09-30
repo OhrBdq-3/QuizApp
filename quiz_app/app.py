@@ -2319,7 +2319,7 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
             accent_name.grid(row=9, column=0, columnspan=2, sticky="w", pady=(8, 0))
 
             def refresh_accent_swatches():
-                current = self._settings_cfg.get("accent", "midnight")
+                current = self._settings_cfg.get("accent", "plum")
                 for aid, btn in accent_swatch_btns.items():
                     btn.config(text="✓" if aid == current else "")
                 accent_name.config(text="当前颜色：" + settings_mod.ACCENT_THEMES[current]["label"])

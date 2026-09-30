@@ -25,7 +25,7 @@ THEME_LABELS = {"system": "跟随系统", "light": "浅色", "dark": "深色"}
 #   FG_ON_ACCENT   主色上的文字（白/黑）
 #
 # 前面四组是「暖纸质」主色系（与整体界面同源：深梅紫 / 陶土橙 / 鼠尾草绿 /
-# 沙金），后面是常见的冷色预设。
+# 沙金）。
 ACCENT_THEMES = {
     "plum": {  # 深梅紫（默认，暖色主色）
         "label": "暖梅紫",
@@ -49,54 +49,6 @@ ACCENT_THEMES = {
         "label": "沙金褐",
         "ACCENT": "#a57c45", "ACCENT_HOVER": "#b58b52",
         "ACCENT_ACTIVE": "#87632f", "ACCENT_SOFT": "#eee2ce",
-        "FG_ON_ACCENT": "#ffffff",
-    },
-    "midnight": {  # 深空黑（Windows 深色默认）
-        "label": "深空黑",
-        "ACCENT": "#242424", "ACCENT_HOVER": "#3a3a3a",
-        "ACCENT_ACTIVE": "#111111", "ACCENT_SOFT": "#ececed",
-        "FG_ON_ACCENT": "#ffffff",
-    },
-    "win11": {  # Windows 11 默认强调色（蓝）
-        "label": "Windows 蓝",
-        "ACCENT": "#0067C0", "ACCENT_HOVER": "#0055A0",
-        "ACCENT_ACTIVE": "#003A6E", "ACCENT_SOFT": "#E1F0FA",
-        "FG_ON_ACCENT": "#ffffff",
-    },
-    "vscode": {  # VS Code 编辑器蓝
-        "label": "VS Code 蓝",
-        "ACCENT": "#007ACC", "ACCENT_HOVER": "#0066A8",
-        "ACCENT_ACTIVE": "#004D7A", "ACCENT_SOFT": "#E3F2FD",
-        "FG_ON_ACCENT": "#ffffff",
-    },
-    "violet": {  # VS Code 紫（Visual Studio 品牌色）
-        "label": "VS Code 紫",
-        "ACCENT": "#7C4DFF", "ACCENT_HOVER": "#6940D6",
-        "ACCENT_ACTIVE": "#4A2EB0", "ACCENT_SOFT": "#F0E9FF",
-        "FG_ON_ACCENT": "#ffffff",
-    },
-    "teal": {  # 深青（沉稳，浅色/深色都好看）
-        "label": "青碧",
-        "ACCENT": "#0E7C86", "ACCENT_HOVER": "#0B656E",
-        "ACCENT_ACTIVE": "#074A51", "ACCENT_SOFT": "#E0F3F5",
-        "FG_ON_ACCENT": "#ffffff",
-    },
-    "emerald": {  # 翡翠绿
-        "label": "翡翠绿",
-        "ACCENT": "#16A34A", "ACCENT_HOVER": "#15803D",
-        "ACCENT_ACTIVE": "#166534", "ACCENT_SOFT": "#E4F5E9",
-        "FG_ON_ACCENT": "#ffffff",
-    },
-    "amber": {  # 琥珀橙（暖色）
-        "label": "琥珀橙",
-        "ACCENT": "#EA580C", "ACCENT_HOVER": "#C2410C",
-        "ACCENT_ACTIVE": "#9A3412", "ACCENT_SOFT": "#FDEEDD",
-        "FG_ON_ACCENT": "#ffffff",
-    },
-    "rose": {  # 玫瑰红
-        "label": "玫瑰红",
-        "ACCENT": "#E11D48", "ACCENT_HOVER": "#BE123C",
-        "ACCENT_ACTIVE": "#881337", "ACCENT_SOFT": "#FCE7EC",
         "FG_ON_ACCENT": "#ffffff",
     },
 }
@@ -166,8 +118,8 @@ def normalize(cfg):
         out["default_order"] = "random"
     theme = str(out.get("theme", "system")).lower()
     out["theme"] = theme if theme in THEME_LABELS else "system"
-    accent = str(out.get("accent", "midnight"))
-    out["accent"] = accent if accent in ACCENT_THEMES else "midnight"
+    accent = str(out.get("accent", "plum"))
+    out["accent"] = accent if accent in ACCENT_THEMES else "plum"
     out["ai_panel_collapsed"] = bool(out.get("ai_panel_collapsed", False))
     return out
 
@@ -195,7 +147,7 @@ def accent_colors(accent_id, resolved_theme=None):
     按钮看起来"消失"。所以这里对深色主题做一次反向提亮：主色变浅、其上的
     文字变深，保持"高对比的强调块"这个语义不变。
     """
-    theme = ACCENT_THEMES.get(accent_id, ACCENT_THEMES["midnight"])
+    theme = ACCENT_THEMES.get(accent_id, ACCENT_THEMES["plum"])
     colors = {k: v for k, v in theme.items() if k != "label"}
     if resolved_theme == "dark" and _luminance(colors["ACCENT"]) < 0.35:
         # 混白而不是直接 _lighten：_lighten 会把色相洗掉（深梅紫会变灰），
