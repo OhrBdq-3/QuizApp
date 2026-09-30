@@ -99,46 +99,6 @@ The first row of your Excel file is the header. Only the **Question** column is 
 
 The app automatically recognizes common header variants and option markers (`A.` `A、` `A:` etc.). See `samples/示例题库.xlsx` for reference, or regenerate it with `python scripts/make_sample.py`.
 
-## Project Layout
-
-```text
-quiz_app/
-├── main.py          # entry point (python main.py)
-├── quiz_app/        # application package
-│   ├── app.py                  # main window and quiz flow
-│   ├── ai_explanation.py       # AI explanations (OpenAI-compatible / Ollama)
-│   ├── dialogs.py              # dialogs
-│   ├── settings.py             # appearance and answering settings
-│   ├── shortcuts.py            # keyboard shortcuts
-│   ├── memorization_filter.py  # smart filtering rules
-│   └── paths.py                # unified paths (repo root / data / samples)
-├── scripts/         # command-line scripts
-├── tests/           # tests (python tests/test_core.py)
-├── samples/         # sample question bank
-└── data/            # runtime data, not committed
-```
-
-## Where Is My Data
-
-All runtime data lives in `data/`, so you can copy it anywhere:
-
-- `data/quiz_bank.db` — question bank and wrong-answer notebook
-- `data/quiz_session.json` — practice progress
-- `data/*_settings.json` — appearance, shortcuts, and AI endpoint settings
-
-Delete the corresponding file to clear that data. Back up the whole `data/` folder before upgrading.
-
-## Tests
-
-```bash
-python tests/test_core.py        # bank / session / scoring
-python tests/test_import.py      # Excel import parsing
-python tests/test_gui_smoke.py   # GUI smoke test (opens a window for ~2 seconds)
-python -m unittest discover -s tests -p "test_*.py"
-```
-
-Tests write to a temporary directory by default, so your real data in `data/` is never touched.
-
 ## About AI Explanations
 
 AI features are entirely optional — everything works without configuration. Only when you click "AI Explanation" will the current question be sent to the model service you configured.
