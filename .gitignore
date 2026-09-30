@@ -1,0 +1,45 @@
+# ============ Python ============
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+
+# ============ 项目运行时数据（本地生成，勿提交）============
+# 题库数据库 / 刷题会话进度
+quiz_bank.db
+quiz_session.json
+# 大模型接口配置（含 API Key，属敏感信息）
+ai_settings.json
+# 旧版进度文件
+*.progress.json
+# 导入日志（import 时自动生成，与题库同目录）
+*.import_log.txt
+# make_sample.py 生成的示例题库
+示例题库.xlsx
+
+# ============ 生成物 / 输出 ============
+outputs/
+
+# ============ 编辑器 / 系统 ============
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+test*
+make_sample.py
+.workbuddy/
