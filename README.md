@@ -16,14 +16,72 @@
 - **智能筛题** —— 按常见出题规律筛掉"背关键词就行"的题目，生成精简背题库
 - **AI 解析（可选）** —— 接入 OpenAI 兼容接口、Ollama、LM Studio 等模型服务，一键生成考点分析和易错点提示
 
-## 快速开始
+## 安装
+
+需要 **Python 3.9 或更高版本**（推荐 3.11）。界面使用 Python 自带的 Tkinter，无需额外安装 GUI 框架。
+
+建议用虚拟环境安装依赖，避免污染系统 Python。下面两种方式选一种即可。
+
+### 方式一：venv
+
+Windows（PowerShell）：
+
+```powershell
+# 1. 进入项目目录
+cd D:\人工智能平台工作\工具\quiz_app
+
+# 2. 创建虚拟环境
+python -m venv .venv
+
+# 3. 激活虚拟环境
+.venv\Scripts\Activate.ps1
+# 若提示禁止运行脚本，改用：.venv\Scripts\activate.bat
+
+# 4. 安装依赖
+pip install -r requirements.txt
+```
+
+macOS / Linux：
+
+```bash
+cd /path/to/quiz_app
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+### 方式二：Conda
+
+```bash
+# 1. 创建并激活环境
+conda create -n quiz python=3.11
+conda activate quiz
+
+# 2. 进入项目目录后安装依赖
+cd /path/to/quiz_app
+pip install -r requirements.txt
+```
+
+### 只装一个依赖也可以
+
+如果不想用虚拟环境，直接装唯一的第三方依赖也行：
 
 ```bash
 pip install openpyxl
+```
+
+## 启动
+
+每次运行前记得先激活环境（venv：`.venv\Scripts\Activate.ps1`；conda：`conda activate quiz`），然后：
+
+```bash
 python quiz_app.py
 ```
 
-需要 Python 3，界面使用自带的 Tkinter，无需额外安装。
+> **提示：** 如果启动时报 `No module named 'tkinter'`，说明你的 Python 缺少 Tk 组件：
+> - Windows：重新运行官方安装程序，勾选 **"tcl/tk and IDLE"**
+> - Ubuntu/Debian：`sudo apt install python3-tk`
+> - macOS：建议使用 python.org 官方安装包（Homebrew 版可能缺失）
 
 ## 题库格式
 
@@ -57,4 +115,6 @@ AI 功能完全可选，不配置不影响刷题。只有主动点击「AI 解�
 
 本项目用于个人学习和题库复习。请勿在禁止使用外部工具或 AI 辅助的考试、竞赛及正式考核中使用，使用者应自行遵守相关规则。题库内容和 AI 解析可能存在错误，请自行核实。
 
-License: MIT
+## 开源协议
+
+本项目基于 [MIT License](LICENSE) 发布，可自由使用、修改和分发。

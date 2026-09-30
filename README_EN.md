@@ -16,14 +16,72 @@ No internet connection, no sign-up — all data stays on your own computer.
 - **Smart filtering** — filters out questions that only require memorizing keywords, generating a condensed review bank
 - **AI explanations (optional)** — connect to OpenAI-compatible APIs, Ollama, LM Studio, and more to generate key points and common pitfalls with one click
 
-## Quick Start
+## Installation
+
+Requires **Python 3.9 or newer** (3.11 recommended). The UI is built with the bundled Tkinter — no extra GUI framework needed.
+
+Using a virtual environment is recommended to avoid polluting your system Python. Pick either option below.
+
+### Option 1: venv (recommended)
+
+Windows (PowerShell):
+
+```powershell
+# 1. Go to the project directory
+cd D:\path\to\quiz_app
+
+# 2. Create a virtual environment
+python -m venv .venv
+
+# 3. Activate it
+.venv\Scripts\Activate.ps1
+# If script execution is blocked, use instead: .venv\Scripts\activate.bat
+
+# 4. Install dependencies
+pip install -r requirements.txt
+```
+
+macOS / Linux:
+
+```bash
+cd /path/to/quiz_app
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+### Option 2: Conda
+
+```bash
+# 1. Create and activate an environment
+conda create -n quiz python=3.11
+conda activate quiz
+
+# 2. Install dependencies
+cd /path/to/quiz_app
+pip install -r requirements.txt
+```
+
+### Minimal install
+
+If you'd rather skip virtual environments, installing the single third-party dependency is enough:
 
 ```bash
 pip install openpyxl
+```
+
+## Running
+
+Activate the environment first (venv: `.venv\Scripts\Activate.ps1`; conda: `conda activate quiz`), then:
+
+```bash
 python quiz_app.py
 ```
 
-Requires Python 3. The UI is built with the bundled Tkinter — no extra installation needed.
+> **Note:** If you see `No module named 'tkinter'`, your Python is missing the Tk component:
+> - Windows: re-run the official installer and check **"tcl/tk and IDLE"**
+> - Ubuntu/Debian: `sudo apt install python3-tk`
+> - macOS: prefer the python.org installer (the Homebrew build may lack Tk)
 
 ## Question Bank Format
 
@@ -57,4 +115,6 @@ AI features are entirely optional — everything works without configuration. On
 
 This project is intended for personal study and question-bank review. Do not use it in exams, competitions, or formal assessments where external tools or AI assistance are prohibited. Question content and AI-generated explanations may contain errors — always verify them yourself.
 
-License: MIT
+## License
+
+Released under the [MIT License](LICENSE) — free to use, modify, and distribute.
