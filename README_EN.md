@@ -14,6 +14,7 @@ No internet connection, no sign-up — all data stays on your own computer.
 - **Wrong-answer notebook** — questions you get wrong are collected automatically and removed once answered correctly
 - **Auto-saved progress** — close the app and reopen it; you'll continue right where you left off
 - **Smart filtering** — filters out questions that only require memorizing keywords, generating a condensed review bank
+- **Keyboard-first** — pick answers with letter keys, move between questions with arrow keys, no mouse needed
 - **AI explanations (optional)** — connect to OpenAI-compatible APIs, Ollama, LM Studio, and more to generate key points and common pitfalls with one click
 
 ## Installation
@@ -98,6 +99,21 @@ The first row of your Excel file is the header. Only the **Question** column is 
 | 难度 (Difficulty) | No | 简单 / 中等 / 困难 (easy / medium / hard) |
 
 The app automatically recognizes common header variants and option markers (`A.` `A、` `A:` etc.). See `samples/示例题库.xlsx` for reference, or regenerate it with `python scripts/make_sample.py`.
+
+## Keyboard Shortcuts
+
+| Key | Action |
+| --- | --- |
+| `A` `S` `D` `F` | Select the matching option (default) |
+| `Enter` / `Space` | Submit a multiple-choice answer |
+| `←` `↑` | Previous question |
+| `→` `↓` | Next question |
+
+Answer keys can be rebound to any letter, digit, `Enter`, or `Space` under *Settings · Shortcuts*. Arrow-key paging is fixed and not configurable.
+
+Arrow keys still page after you've answered a question, so you can go back and review. When focus is inside the explanation panel, arrows keep their native scrolling behavior instead of paging.
+
+> With a Chinese IME active, letter keys get swallowed by the input method. The app works around this automatically; if it still fails in some environments, switch to English input.
 
 ## About AI Explanations
 

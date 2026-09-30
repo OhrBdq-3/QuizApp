@@ -153,7 +153,7 @@ class AIExplanationMixin:
         shown = self._ai_visible.get(key, "")
         pending = key in self._ai_pending or shown != target
         self.btn_ai.config(text='解析中…' if pending else 'AI 解析', state='disabled' if pending or key is None else 'normal')
-        value = shown or '点击 AI 解析，查看关键考点与解题思路。'
+        value = shown or '点上方按钮生成讲解。'
         if pending and not shown:
             value = '正在连接模型…'
         changed_question = getattr(self, '_ai_display_key', None) != key
@@ -232,6 +232,18 @@ class AIExplanationMixin:
         self._ai_poll_id = self.root.after(20, self._poll_ai)
 
 
+def _surface_is_dark(widget) -> bool:
+    """按控件自己的背景判断深浅，让派生色不再写死（深色模式下曾出现浅底浅字）。"""
+    try:
+        h = str(widget.cget('background')).lstrip('#')
+        if len(h) < 6:
+            return False
+        r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+    except (ValueError, tk.TclError, TypeError):
+        return False
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255 < 0.5
+
+
 def render_markdown(widget, source, reset=False):
     """Render common study-note Markdown safely in Tk, preserving reading position."""
     if getattr(widget, '_markdown_source', None) == source and not reset:
@@ -244,8 +256,11 @@ def render_markdown(widget, source, reset=False):
     size = base_font.actual('size')
     widget.tag_configure('heading', font=(family, size + 1, 'bold'), spacing1=12, spacing3=7)
     widget.tag_configure('bold', font=(family, size, 'bold'))
-    widget.tag_configure('code', font=('Consolas', size), background='#f0f0f1')
-    widget.tag_configure('quote', foreground='#707078', lmargin1=16, lmargin2=16)
+    dark = _surface_is_dark(widget)
+    widget.tag_configure('code', font=('Consolas', size),
+                         background=('#2b303a' if dark else '#f0f0f1'))
+    widget.tag_configure('quote', foreground=('#9ca3af' if dark else '#707078'),
+                         lmargin1=16, lmargin2=16)
     widget.tag_configure('list', lmargin1=12, lmargin2=26, spacing3=5)
     widget.configure(state='normal', spacing1=3, spacing3=6)
     runs = []

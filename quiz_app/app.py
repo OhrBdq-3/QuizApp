@@ -38,6 +38,8 @@ import json
 from .ai_explanation import AIExplanationMixin
 from .shortcuts import ShortcutMixin
 from .dialogs import AppDialogs
+from . import theme
+from . import widgets
 from .memorization_filter import filter_questions, should_drop, ABSOLUTE_WORDS
 from . import settings as settings_mod
 from .paths import DATA_DIR
@@ -50,7 +52,7 @@ import sys
 import tkinter as tk
 from dataclasses import dataclass, field
 from datetime import datetime
-from tkinter import filedialog, ttk
+from tkinter import filedialog, font as tkfont, ttk
 from typing import Optional
 
 # ---------------------------------------------------------------------------
@@ -383,8 +385,13 @@ def _base_dir() -> str:
 DB_FILE = os.path.join(DATA_DIR, "quiz_bank.db")
 SESSION_FILE = os.path.join(DATA_DIR, "quiz_session.json")
 
-# ---------- 现代配色（扁平 + 少量阴影感的分层色） ----------
-FONT_FAMILY = "Microsoft YaHei UI"           # Windows 现代无衬线字体
+# ---------- 配色：暖纸质（paper / plum / terra / sage） ----------
+# 底色是暖米纸，卡片是暖白，描边和文字都是偏褐的暖灰——和纯白 + 中性灰的
+# 观感完全不同，这是整套界面"暖"的来源。
+FONT_FAMILY = "Microsoft YaHei UI"           # 正文：Windows 现代无衬线字体
+# 标题：衬线（思源宋体），和参考风格里的宋体标题同一路数；没装就回退正文字体
+HEAD_FAMILY_CANDIDATES = ("Noto Serif SC", "Songti SC", "Source Han Serif SC",
+                          "STSong", "SimSun")
 
 # 字体缩放系数（0.8–1.5），由综合设置写入；_font() 用它做全局缩放
 FONT_SCALE = 1.0
@@ -398,34 +405,74 @@ def _font(size, weight="normal"):
     return (FONT_FAMILY, max(1, round(size * FONT_SCALE)), weight)
 
 
-# 背景 / 表面
-BG_APP = "#ffffff"        # 应用整体背景（浅灰）
-BG_CARD = "#ffffff"       # 卡片 / 表面（白）
-BG_SUBTLE = "#f7f7f8"     # 次级面板（更浅的灰白）
-BORDER = "#e5e7eb"        # 描边 / 分隔线
-BORDER_SOFT = "#eef0f3"
+_head_family = None
+
+
+def _head_font(size, weight="normal"):
+    """标题用的衬线字体。
+
+    系统不一定装了思源宋体，所以第一次调用时探测一次可用字体族并缓存；
+    全都没有就退回正文的无衬线字体（Tk 对不存在的 family 会静默回退，
+    但我们显式探测能保证不会拿到一个难看的默认位图字体）。
+    """
+    global _head_family
+    if _head_family is None:
+        _head_family = FONT_FAMILY
+        try:
+            from tkinter import font as tkfont
+            names = set(tkfont.families())
+            for cand in HEAD_FAMILY_CANDIDATES:
+                if cand in names:
+                    _head_family = cand
+                    break
+        except Exception:
+            pass
+    return (_head_family, max(1, round(size * FONT_SCALE)), weight)
+
+
+# 背景 / 表面：三层结构，BG_APP 比 BG_CARD 深一档，白卡片才"浮"得起来。
+# （这里的值必须与 settings.THEME_PALETTES["light"] 一致，启动时会被
+#  _apply_color_theme 按当前主题覆盖。）
+BG_APP = "#f5f0e8"        # 页面底色（暖米纸）
+BG_CARD = "#fffdfa"       # 卡片 / 表面（暖白）
+BG_SUBTLE = "#faf5ec"     # 卡片内的次级面板
+BG_SIDE = "#ede6dc"       # 侧栏（比页面底再深一档）
+BORDER = "#ded5c8"        # 描边 / 分隔线
+BORDER_SOFT = "#e9e0d2"
 
 # 文字
-FG_TEXT = "#202123"       # 主文字（深灰黑）
-FG_MUTED = "#707078"      # 次要文字
-FG_FAINT = "#9ca3af"      # 弱化文字
+FG_TEXT = "#29251f"       # 主文字（近墨褐）
+FG_MUTED = "#746d63"      # 次要文字
+FG_FAINT = "#9a9186"      # 弱化文字
 FG_ON_ACCENT = "#ffffff"  # 主题色上的文字
 
-# 主题色（深空黑，可由综合设置切换；hover/active/soft/on 由 _apply_theme 派生）
-ACCENT = "#242424"
-ACCENT_HOVER = "#3a3a3a"
-ACCENT_ACTIVE = "#111111"
-ACCENT_SOFT = "#ececed"   # 主题色浅底（选中/高亮背景）
+# 主题色（暖梅紫，可由综合设置切换；hover/active/soft/on 由 _apply_theme 派生）
+ACCENT = "#4d3045"
+ACCENT_HOVER = "#5e3b53"
+ACCENT_ACTIVE = "#3a2433"
+ACCENT_SOFT = "#e8dfe5"   # 主题色浅底（选中/高亮背景）
+# 次级按钮的填充色。clam 主题下 ttk 按钮的描边（lightcolor/darkcolor）实际画不出来，
+# 纯白底按钮落在白卡片上就"消失"了，所以次级按钮统一用浅一档填充来区分层级。
+BTN_SOFT = "#ece5da"
+BTN_SOFT_HOVER = "#e2d9cb"
 
-# 语义色
-C_OK = "#16a34a"          # 答对（绿）
-C_OK_SOFT = "#dcfce7"     # 答对浅底
-C_BAD = "#dc2626"         # 答错（红）
-C_BAD_SOFT = "#fee2e2"    # 答错浅底
-C_UNANSWERED = "#eeeeef"  # 未答（灰）
+# 做题页三列布局：答题卡（固定） / 题目（吃掉剩余宽度） / AI 解析（窄栏，可收起）
+AI_COL_MIN = 220   # AI 解析栏的最小宽度；收起时列宽会归零
+
+# 语义色（答对 / 答错同样走暖色：鼠尾草绿、砖红，不用鲜艳的原色）
+C_OK = "#477358"          # 答对（鼠尾草绿）
+C_OK_SOFT = "#dfe8df"     # 答对浅底
+C_BAD = "#b44d43"         # 答错（砖红）
+C_BAD_SOFT = "#f5ded2"    # 答错浅底
+C_UNANSWERED = "#e7dfd2"  # 未答（暖灰）
 C_CURRENT = ACCENT        # 当前题（主题色）
 C_TEXT_ON_CELL = "#ffffff"  # 深色格子上的序号
-C_TEXT_ON_LIGHT = "#374151"  # 浅色格子上的序号
+C_TEXT_ON_LIGHT = "#4a433a"  # 浅色格子上的序号
+
+# 阴影替代色：Tk 没有真阴影，用卡片下方一块压深一档的暖色模拟"抬起"的感觉
+SHADOW = "#e9dfd0"
+# 卡片投影露出的像素数（0=不投影）
+CARD_SHADOW = 4
 
 
 class BankDB:
@@ -684,162 +731,95 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
         # 窗口整体浅灰背景，白卡片浮于其上
         self.root.config(bg=BG_APP)
         self.root.option_add("*Font", _font(10))
-        style.configure("TFrame", background=BG_CARD)
-        style.configure("TLabel", background=BG_CARD, foreground=FG_TEXT, font=_font(10))
-        style.configure("Treeview", font=_font(11), rowheight=40, background=BG_CARD,
-                        fieldbackground=BG_CARD, foreground=FG_TEXT, borderwidth=0)
-        style.configure("Treeview.Heading", font=_font(10, "bold"), background=BG_SUBTLE)
-        style.map("Treeview", background=[("selected", ACCENT_SOFT)], foreground=[("selected", FG_TEXT)])
+        # 全部 ttk 样式集中到 _reconfigure_styles()：这里和"换主题"走同一份定义，
+        # 否则两处各写一遍，改了这边忘了那边就会出现深浅色不一致。
+        self._reconfigure_styles()
 
-        # --- 通用按钮（扁平、圆角感靠 padding + 无边框） ---
-        style.configure("TButton", font=_font(10), padding=(12, 7), borderwidth=0,
-                        relief="flat", background=BG_CARD, foreground=FG_TEXT,
-                        lightcolor=BG_CARD, darkcolor=BG_CARD,
-                        focuscolor=ACCENT_SOFT, focusthickness=0)
-        style.map("TButton",
-                  background=[("active", BG_SUBTLE), ("disabled", BG_SUBTLE)],
-                  foreground=[("disabled", FG_FAINT)])
-        # 主题按钮（靛蓝）
-        style.configure("Accent.TButton", font=_font(10, "bold"), padding=(14, 8),
-                        borderwidth=0, relief="flat", background=ACCENT,
-                        foreground=FG_ON_ACCENT, lightcolor=ACCENT, darkcolor=ACCENT,
-                        focuscolor=ACCENT_SOFT, focusthickness=0)
-        style.map("Accent.TButton",
-                  background=[("active", ACCENT_HOVER), ("pressed", ACCENT_ACTIVE),
-                             ("disabled", BG_SUBTLE)],
-                  foreground=[("disabled", FG_FAINT)])
-        # 次级/幽灵按钮（描边感）
-        style.configure("Soft.TButton", font=_font(10), padding=(12, 7),
-                        borderwidth=1, relief="flat", background=BG_CARD,
-                        foreground=FG_TEXT, lightcolor=BORDER, darkcolor=BORDER,
-                        focuscolor=ACCENT_SOFT, focusthickness=0)
-        style.map("Soft.TButton", background=[("active", ACCENT_SOFT), ("disabled", BG_SUBTLE)],
-                  foreground=[("disabled", FG_FAINT)])
-        # 删除按钮（灰色弱化，避免过于显眼）
-        style.configure("Danger.TButton", font=_font(9), padding=(10, 5),
-                        borderwidth=1, relief="flat", background=BG_CARD,
-                        foreground=FG_MUTED, lightcolor=BORDER, darkcolor=BORDER,
-                        focuscolor=BG_SUBTLE, focusthickness=0)
-        style.map("Danger.TButton",
-                  background=[("active", BG_SUBTLE), ("disabled", BG_SUBTLE)],
-                  foreground=[("active", FG_MUTED), ("disabled", FG_FAINT)])
-
-        # --- 标签 ---
-        style.configure("Header.TLabel", font=_font(18, "bold"), background=BG_APP,
-                        foreground=FG_TEXT)
-        style.configure("Sub.TLabel", font=_font(10), background=BG_APP, foreground=FG_MUTED)
-        style.configure("SubCard.TLabel", font=_font(10), background=BG_SUBTLE,
-                        foreground=FG_MUTED)
-        style.configure("Question.TLabel", font=_font(16), background=BG_CARD,
-                        foreground=FG_TEXT, wraplength=620, justify="left")
-        style.configure("Explain.TLabel", font=_font(11), background=BG_SUBTLE,
-                        foreground=FG_MUTED, wraplength=620, justify="left",
-                        padding=(12, 10))
-        style.configure("Ok.TLabel", font=_font(11, "bold"), background=C_OK_SOFT,
-                        foreground=C_OK, padding=(12, 10))
-        style.configure("Bad.TLabel", font=_font(11, "bold"), background=C_BAD_SOFT,
-                        foreground=C_BAD, padding=(12, 10))
-        style.configure("Option.TCheckbutton", font=_font(11), background=BG_CARD,
-                        foreground=FG_TEXT, padding=(8, 4))
-
-        # --- 下拉框 ---
-        style.configure("TCombobox", fieldbackground=BG_CARD, background=BG_CARD,
-                        foreground=FG_TEXT, arrowcolor=ACCENT, bordercolor=BORDER,
-                        lightcolor=BG_CARD, darkcolor=BG_CARD, selectbackground=ACCENT,
-                        selectforeground=FG_ON_ACCENT, padding=5)
-        style.map("TCombobox", fieldbackground=[("readonly", BG_CARD), ("disabled", BG_SUBTLE)],
-                  arrowcolor=[("readonly", ACCENT)], bordercolor=[("focus", ACCENT)])
-
-        # --- 进度条（细、主题色） ---
-        style.configure("TProgressbar", background=ACCENT, troughcolor=BG_SUBTLE,
-                        bordercolor=BORDER, lightcolor=ACCENT, darkcolor=ACCENT,
-                        thickness=6)
-        style.map("TProgressbar", background=[("disabled", BORDER)])
-
-        # --- 滚动条（细、浅灰） ---
-        style.configure("Vertical.TScrollbar", background=BORDER, troughcolor=BG_APP,
-                        bordercolor=BG_APP, arrowcolor=FG_MUTED, relief="flat",
-                        arrowsize=12)
-        style.map("Vertical.TScrollbar",
-                  background=[("active", FG_FAINT), ("pressed", FG_FAINT)])
-
-        # 顶栏：白底头部卡片（标题 + 题库信息 + 控件）
-        top = tk.Frame(self.root, bg=BG_CARD)
+        # 顶栏：一条圆角横向 bar（品牌 + 全局控件），与下方卡片同宽对齐
+        top = widgets.RoundedFrame(self.root, radius=theme.R_LG, bg=BG_CARD,
+                                   border=BORDER, shadow=CARD_SHADOW)
         self.quiz_header = top
-        # 左侧标题区
-        head = tk.Frame(top, bg=BG_CARD)
-        head.pack(side="left", padx=(8, 32), pady=8)
-        tk.Label(head, text="刷题", bg=BG_CARD, fg=FG_TEXT,
-                 font=_font(14, "bold")).pack(anchor="w")
-        #self.file_label = tk.Label(head, text="尚未导入题库", bg=BG_CARD,
-        #                           fg=FG_MUTED, font=_font(10), anchor="w",
-        #                           justify="left")
-        #self.file_label.pack(anchor="w", pady=(3, 0))
+        # 左侧品牌区：accent 圆角方块 + 应用名
+        self._canvas_bits = []
+        self._make_brand(top.body, lambda: BG_CARD, subtitle="本地离线 · 导入即练").pack(
+            side="left", padx=(theme.SP_4, theme.SP_6), pady=theme.SP_3)
 
-        # 顺序选择：随机乱序 / 原顺序
-        ctl = tk.Frame(top, bg=BG_CARD)
-        ctl.pack(side="left", fill="x", expand=True, pady=8)
-        tk.Label(ctl, text="顺序", bg=BG_CARD, fg=FG_MUTED, font=_font(10)).pack(side="left", padx=(6, 6))
+        # 右侧控件区：顺序 → 试卷 → 导入
+        ctl = tk.Frame(top.body, bg=BG_CARD)
+        ctl.pack(side="right", padx=(0, theme.SP_4), pady=theme.SP_3)
+        tk.Label(ctl, text="顺序", bg=BG_CARD, fg=FG_MUTED,
+                 font=_font(theme.FS_META)).pack(side="left", padx=(0, theme.SP_2))
         self.order_var = tk.StringVar(value="随机乱序")
-        self.order_combo = ttk.Combobox(ctl, textvariable=self.order_var,
-                                        state="disabled", width=9,
-                                        values=["随机乱序", "原顺序", "题型分组"])
-        self.order_combo.pack(side="left", padx=(0, 14))
+        order_shell, self.order_combo = self._combo(
+            ctl, textvariable=self.order_var, state="disabled", width=9,
+            values=["随机乱序", "原顺序", "题型分组"])
+        order_shell.pack(side="left", padx=(0, theme.SP_4))
         self.order_combo.bind("<<ComboboxSelected>>", self._on_order_change)
 
         # 试卷选择
         self.sheet_var = tk.StringVar()
-        self.sheet_combo = ttk.Combobox(ctl, textvariable=self.sheet_var,
-                                        state="disabled", width=22)
-        self.sheet_combo.pack(side="left", padx=(0, 10))
+        sheet_shell, self.sheet_combo = self._combo(
+            ctl, textvariable=self.sheet_var, state="disabled", width=22)
+        sheet_shell.pack(side="left", padx=(0, theme.SP_3))
         self.sheet_combo.bind("<<ComboboxSelected>>", self._on_sheet_change)
-        ttk.Button(ctl, text="导入题库", command=self.on_import,
-                   style="Accent.TButton").pack(side="left")
+        self._button(ctl, "导入题库", self.on_import, "accent").pack(side="left")
 
         # ============ 两个顶层视图：导航页（我的题库）/ 做题页 ============
         # 做题页：进度条 + 题目卡(答题) + 底部操作栏，整体装进 quiz_view
         self.quiz_view = tk.Frame(self.root, bg=BG_APP)
         # 导航页：我的题库（卡片列表），装进 bank_view
         self.bank_view = tk.Frame(self.root, bg=BG_APP)
-        bank_sidebar = tk.Frame(self.bank_view, bg=BG_SUBTLE, width=200, padx=16, pady=28)
-        bank_sidebar.pack(side="left", fill="y")
+        # 侧栏：比页面底再深一档的暖色块，当前项做成"浮起的一张卡片"
+        bank_sidebar = widgets.RoundedFrame(self.bank_view, radius=theme.R_LG,
+                                            bg=BG_SIDE, border=BORDER_SOFT,
+                                            width=220,
+                                            padx=theme.SP_4, pady=theme.SP_5,
+                                            shadow=CARD_SHADOW)
+        bank_sidebar.pack(side="left", fill="y", padx=(theme.SP_5, 0),
+                          pady=theme.SP_5)
         bank_sidebar.pack_propagate(False)
-        tk.Label(bank_sidebar, text="刷题空间", bg=BG_SUBTLE, fg=FG_TEXT,
-                 font=_font(14, "bold")).pack(anchor="w", pady=(0, 32))
-        for label, action in (("＋  导入题库", self.on_import),
-                              ("我的题库", self.show_bank)):
-            ttk.Button(bank_sidebar, text=label, command=action, style="Soft.TButton").pack(fill="x", pady=5)
-        ttk.Button(bank_sidebar, text="设置", command=self.open_settings,
-                   style="Soft.TButton").pack(side="bottom", fill="x")
+        self._make_brand(bank_sidebar.body, lambda: BG_SIDE).pack(anchor="w",
+                                                                 pady=(0, theme.SP_8))
+        for label, action, variant in (("＋  导入题库", self.on_import, "soft"),
+                                       ("我的题库", self.show_bank, "side")):
+            self._button(bank_sidebar.body, label, action,
+                         variant).pack(fill="x", pady=theme.SP_1)
+        self._button(bank_sidebar.body, "设置", self.open_settings,
+                     "soft").pack(side="bottom", fill="x")
 
         # --- 做题页内部：进度条（细、主题色，独立一行） ---
         self.progress_var = tk.IntVar(value=0)
         prog = tk.Frame(self.quiz_view, bg=BG_APP)
-        prog.pack(fill="x", padx=28, pady=(0, 12))
-        self.progress_bar = ttk.Progressbar(prog, variable=self.progress_var, maximum=100)
+        prog.pack(fill="x", padx=theme.SP_6, pady=(0, theme.SP_3))
+        self.progress_bar = widgets.RoundProgress(
+            prog, variable=self.progress_var, maximum=100, length=300,
+            palette=self._palette())
         self.progress_bar.pack(fill="x", side="left", expand=True)
         self.progress_text = tk.Label(prog, text="0 / 0", bg=BG_APP, fg=FG_MUTED,
-                                      font=_font(10), anchor="e")
-        self.progress_text.pack(side="left", padx=(10, 0))
+                                      font=_font(theme.FS_META), anchor="e")
+        self.progress_text.pack(side="left", padx=(theme.SP_3, 0))
 
-        # 中部：题目卡（左：答题卡 / 中：题目 / 右：AI 解析），白底卡片
-        self.card = tk.Frame(self.quiz_view, bg=BG_CARD, highlightthickness=0,
-                             highlightbackground=BORDER)
-        self.card.pack(fill="both", expand=True, padx=24, pady=(0, 16))
-        self.card.columnconfigure(0, weight=4)
-        self.card.columnconfigure(1, weight=1)
-        self.card.rowconfigure(0, weight=1)
-        # 卡片内边距：用一个内层 frame 撑起 padding
-        inner = tk.Frame(self.card, bg=BG_CARD, padx=0, pady=8)
-        inner.grid(row=0, column=0, columnspan=2, sticky="nsew")
+        # 中部：题目卡（左：答题卡 / 中：题目 / 右：AI 解析），圆角暖白卡
+        self.card = widgets.RoundedFrame(self.quiz_view, radius=theme.R_LG,
+                                         bg=BG_CARD, border=BORDER,
+                                         padx=theme.SP_4, pady=theme.SP_4,
+                                         shadow=CARD_SHADOW)
+        self.card.pack(fill="both", expand=True, padx=theme.SP_6,
+                       pady=(0, theme.SP_4))
+        # 卡片内边距由 RoundedFrame 的 padx/pady 承担，这里只做内容布局
+        inner = tk.Frame(self.card.body, bg=BG_CARD)
+        inner.pack(fill="both", expand=True)
+        self._inner = inner   # 收起 AI 解析栏时要改这里的列权重
+        # 列宽：答题卡固定，题目区吃掉绝大部分剩余宽度，AI 解析只留一条窄栏
+        # （解析是「按需查看」的内容，常驻大块会白占屏幕；需要时还能整个收起）
         inner.columnconfigure(0, weight=0)
-        inner.columnconfigure(1, weight=3, minsize=330)
-        inner.columnconfigure(2, weight=2, minsize=300)
+        inner.columnconfigure(1, weight=4, minsize=380)
+        inner.columnconfigure(2, weight=1, minsize=AI_COL_MIN)
         inner.rowconfigure(0, weight=1)
 
         # --- 右栏：题目内容（装进滚动区，长题干不再撑大窗口） ---
         left = tk.Frame(inner, bg=BG_CARD)
-        left.grid(row=0, column=1, sticky="nsew", padx=(20, 0))
+        left.grid(row=0, column=1, sticky="nsew", padx=(theme.SP_3, 0))
         left.columnconfigure(0, weight=1)
         left.rowconfigure(0, weight=1)   # 行0=题目滚动区（可变高），行1=固定底部条
         left.rowconfigure(1, weight=0)
@@ -870,6 +850,8 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
                  "支持题型：单选 / 多选 / 判断\n"
                  "单选/判断点选项即判分，多选点「提交本题」\n"
                  "答对后自动下一题，答错停留本题看解析\n"
+                 "选项可用键盘 A/S/D/F（可在「设置 · 答题快捷键」里改）\n"
+                 "方向键 ← ↑ 上一题，→ ↓ 下一题\n"
                  "可选随机乱序 / 原顺序 / 题型分组（单选→多选→判断）\\n"
                  "导入一次后题库会永久保存，下次打开自动恢复",
             bg=BG_CARD, fg=FG_MUTED, font=_font(11), justify="left",
@@ -877,9 +859,21 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
         )
         self.placeholder.grid(row=0, column=0, columnspan=2, sticky="nsew")
 
-        self.question_meta = tk.Label(self.q_content, bg=BG_CARD, fg=ACCENT, font=_font(10))
+        # 题干上方的元信息行：题号 + 题型胶囊 + 难度胶囊
+        self.q_meta_row = tk.Frame(self.q_content, bg=BG_CARD)
+        self.question_meta = tk.Label(self.q_meta_row, bg=BG_CARD, fg=FG_MUTED,
+                                      font=_font(theme.FS_META))
+        self.question_meta.pack(side="left")
+        self.q_type_pill = widgets.Pill(self.q_meta_row, "", self._palette(),
+                                        font=_font(theme.FS_MICRO), padx=9, pady=3)
+        self.q_type_pill.pack(side="left", padx=(theme.SP_2, 0))
+        self.q_diff_pill = widgets.Pill(self.q_meta_row, "", self._palette(),
+                                        fg=FG_MUTED, bg=BG_SUBTLE,
+                                        font=_font(theme.FS_MICRO), padx=9, pady=3)
+        self.q_diff_pill.pack(side="left", padx=(theme.SP_1, 0))
+
         self.question_label = ttk.Label(self.q_content, style="Question.TLabel",
-                                        font=_font(16), justify="left", anchor="nw",
+                                        font=_font(theme.FS_Q), justify="left", anchor="nw",
                                         text="")
         self.options_frame = ttk.Frame(self.q_content)
         try:  # 去掉 clam 主题 ttk.Frame 自带约 2px 边距，让选项行贴齐卡片内容边缘
@@ -887,8 +881,8 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
         except tk.TclError:
             pass
         # 多选题提交按钮：放在选项正下方（题目区内，不再放底部操作栏）
-        self.btn_submit = ttk.Button(self.q_content, text="提交答案",
-                                     style="Accent.TButton", command=self.on_submit)
+        self.btn_submit = self._button(self.q_content, "提交答案", self.on_submit,
+                                       "accent")
         # 结果条：对错 + 正确答案（内联，不弹窗）
         self.result_label = ttk.Label(self.q_content, text="", style="Ok.TLabel")
         self.explain_label = ttk.Label(self.q_bottom, style="Explain.TLabel", text="")
@@ -900,20 +894,22 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
         self._q_shown = False
         self._last_q_w = 0
 
-        # --- 左栏：题目矩阵（序号+状态色，点击跳转），浅灰面板 ---
-        right = tk.Frame(inner, bg=BG_SUBTLE, padx=8, pady=12, highlightthickness=0,
-                         highlightbackground=BORDER)
+        # --- 左栏：题目矩阵（序号+状态色，点击跳转），次级面板 ---
+        right = widgets.RoundedFrame(inner, radius=theme.R_MD, bg=BG_SUBTLE,
+                                     border=BORDER, padx=theme.SP_3,
+                                     pady=theme.SP_3)
         right.grid(row=0, column=0, sticky="nsew")
-        right.columnconfigure(0, weight=1)
-        right.rowconfigure(1, weight=1)
-        tk.Label(right, text="答题卡", bg=BG_SUBTLE, fg=FG_MUTED,
-                 font=_font(10, "bold")).grid(row=0, column=0, columnspan=2,
-                                              sticky="ew", padx=10, pady=(10, 6))
+        right.body.columnconfigure(0, weight=1)
+        right.body.rowconfigure(1, weight=1)
+        tk.Label(right.body, text="答题卡", bg=BG_SUBTLE, fg=FG_MUTED,
+                 font=_font(theme.FS_META, "bold")).grid(
+                     row=0, column=0, columnspan=2, sticky="ew",
+                     padx=theme.SP_2, pady=(theme.SP_2, theme.SP_2))
 
-        self.list_canvas = tk.Canvas(right, highlightthickness=0, width=240,
+        self.list_canvas = tk.Canvas(right.body, highlightthickness=0, width=240,
                                      bg=BG_SUBTLE)
         self.list_canvas.grid(row=1, column=0, sticky="nsew")
-        self.list_sb = ttk.Scrollbar(right, orient="vertical",
+        self.list_sb = ttk.Scrollbar(right.body, orient="vertical",
                                      command=self.list_canvas.yview)
         self.list_sb.grid(row=1, column=1, sticky="ns")
         self.list_canvas.config(yscrollcommand=self.list_sb.set)
@@ -932,63 +928,82 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
         self.list_canvas.bind("<Button-4>", self._on_matrix_wheel)
         self.list_canvas.bind("<Button-5>", self._on_matrix_wheel)
 
-        legend = tk.Frame(right, bg=BG_SUBTLE)
-        legend.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(8, 10), padx=10)
-        for color, text in ((C_BAD, "答错"), (C_OK, "答对"),
-                            (C_UNANSWERED, "未答"), (C_CURRENT, "当前")):
-            tk.Label(legend, bg=color, width=1, height=1).pack(side="left",
-                                                                padx=(0, 3), pady=2)
+        # 图例：色块用圆角小方块（原来的 1 字符 Label 是个实心小矩形，很糙）
+        legend = tk.Frame(right.body, bg=BG_SUBTLE)
+        legend.grid(row=2, column=0, columnspan=2, sticky="ew",
+                    pady=(theme.SP_2, 0), padx=theme.SP_2)
+        # 存"取色函数名"而不是颜色本身：换主题/换主题色后要能重新取到新色
+        self._legend_badges = []
+        for color_of, text in ((lambda: C_BAD, "答错"), (lambda: C_OK, "答对"),
+                               (lambda: C_UNANSWERED, "未答"), (lambda: C_CURRENT, "当前")):
+            dot = widgets.Badge(legend, color_of(), size=11, radius=3)
+            dot.config(bg=BG_SUBTLE)
+            dot.pack(side="left", padx=(0, theme.SP_1))
+            self._legend_badges.append((dot, color_of))
             tk.Label(legend, text=text, bg=BG_SUBTLE, fg=FG_MUTED,
-                     font=_font(9)).pack(side="left", padx=(0, 10))
+                     font=_font(theme.FS_MICRO)).pack(side="left",
+                                                      padx=(0, theme.SP_2))
 
-        # 底部：操作栏（白色），属于做题页
+        # 底部：操作栏（页面底色），属于做题页
         bottom = tk.Frame(self.quiz_view, bg=BG_APP)
-        bottom.pack(fill="x", padx=24, pady=(0, 22))
+        # 贴底 + before=self.card：pack 是按调用顺序分配空间的，先给操作栏留位置，
+        # 否则题目卡（expand）会把它挤成一条缝，按钮被压扁到看不清文字。
+        bottom.pack(side="bottom", fill="x", padx=theme.SP_6,
+                    pady=(0, theme.SP_5), before=self.card)
         # 翻题按钮：放进题目滚动内容区（q_content），与选项同一列、同一左右边距，
         # 保证「上一题/下一题」左边缘与选项行左边缘严格对齐。
-        style.configure("Nav.Soft.TButton", font=_font(10), padding=(16, 10))
-        style.configure("Nav.Accent.TButton", font=_font(10, "bold"), padding=(16, 10))
         self.nav_frame = tk.Frame(self.q_bottom, bg=BG_CARD)
-        self.btn_prev = ttk.Button(self.nav_frame, text="上一题", style="Nav.Soft.TButton",
-                                   width=10, command=self.on_prev)
-        self.btn_prev.pack(side="left", padx=(0, 12))
-        self.btn_next = ttk.Button(self.nav_frame, text="下一题", style="Nav.Accent.TButton",
-                                   width=10, command=self.on_next)
+        self.btn_prev = self._button(self.nav_frame, "上一题", self.on_prev,
+                                     "nav_soft", width=10)
+        self.btn_prev.pack(side="left", padx=(0, theme.SP_3))
+        self.btn_next = self._button(self.nav_frame, "下一题", self.on_next,
+                                     "nav_accent", width=10)
         self.btn_next.pack(side="left")
-        self.btn_favorite = ttk.Button(self.q_content, text="收藏题目", command=self.on_favorite)
+        tk.Label(self.nav_frame, text="← → 翻页", bg=BG_CARD, fg=FG_MUTED,
+                 font=_font(theme.FS_MICRO)).pack(side="left", padx=(theme.SP_4, 0))
+        # AI 解析栏收起时，这里成为重新展开的入口（默认不显示）
+        self.btn_ai_show = self._button(self.nav_frame, "AI 解析 ▸",
+                                        self._expand_ai_panel, "soft")
+        self.btn_favorite = self._button(self.q_content, "收藏题目", self.on_favorite)
         self.btn_favorite.grid(row=6, column=0, sticky="w", padx=4, pady=10)
-        ai_panel = tk.Frame(inner, bg=BG_CARD, padx=16, pady=16,
-                            highlightthickness=1, highlightbackground=BORDER)
-        ai_heading = tk.Frame(ai_panel, bg=BG_CARD)
-        ai_heading.pack(fill="x", pady=(0, 12))
-        tk.Label(ai_heading, text="AI 解析", bg=BG_CARD, fg=ACCENT,
-                 font=_font(12, "bold")).pack(side="left")
-        tk.Label(ai_heading, text="学习参考", bg=BG_CARD, fg=FG_MUTED,
-                 font=_font(9)).pack(side="right")
-        ai_panel.grid(row=0, column=2, sticky="nsew", padx=(20, 0))
-        ai_actions = tk.Frame(ai_panel, bg=BG_CARD)
+        ai_panel = widgets.RoundedFrame(inner, radius=theme.R_LG, bg=BG_CARD,
+                                        border=BORDER, padx=theme.SP_4,
+                                        pady=theme.SP_4, shadow=CARD_SHADOW)
+        ai_heading = tk.Frame(ai_panel.body, bg=BG_CARD)
+        ai_heading.pack(fill="x", pady=(0, theme.SP_3))
+        tk.Label(ai_heading, text="AI 解析", bg=BG_CARD, fg=FG_TEXT,
+                 font=_head_font(theme.FS_STRONG + 1, "bold")).pack(side="left")
+        self.btn_ai_collapse = self._button(ai_heading, "收起 ▸",
+                                            self._collapse_ai_panel, "ghost")
+        self.btn_ai_collapse.pack(side="right")
+        self.ai_panel = ai_panel
+        self._ai_padx = (theme.SP_3, 0)
+        ai_panel.grid(row=0, column=2, sticky="nsew", padx=self._ai_padx)
+        ai_actions = tk.Frame(ai_panel.body, bg=BG_CARD)
         ai_actions.pack(fill="x", pady=(0, 12))
-        self.btn_ai = ttk.Button(ai_actions, text="AI 解析", style="Accent.TButton", command=self.on_ai_explain)
+        self.btn_ai = self._button(ai_actions, "AI 解析", self.on_ai_explain, "accent")
         self.btn_ai.pack(side="left")
-        ttk.Button(ai_actions, text="展开阅读", command=self.expand_ai).pack(side="right")
-        self.ai_text = tk.Text(ai_panel, height=18, width=1, wrap="word", font=_font(11),
-                               relief="flat", bg=BG_CARD, fg=FG_TEXT, padx=4, pady=6, state="disabled")
+        self._button(ai_actions, "展开阅读", self.expand_ai).pack(side="right")
+        # 解析正文：外层再套一个圆角面板，Tk 的 Text 本身是直角的
+        ai_text_wrap = widgets.RoundedFrame(ai_panel.body, radius=theme.R_MD,
+                                            bg=BG_SUBTLE, border=BORDER_SOFT)
+        ai_text_wrap.pack(fill="both", expand=True)
+        self.ai_text = tk.Text(ai_text_wrap.body, height=18, width=1, wrap="word",
+                               font=_font(theme.FS_BODY),
+                               relief="flat", bg=BG_SUBTLE, fg=FG_TEXT,
+                               padx=theme.SP_2, pady=theme.SP_2, state="disabled")
         self.ai_text.pack(side="left", fill="both", expand=True)
-        ai_scroll = ttk.Scrollbar(ai_panel, command=self.ai_text.yview)
+        ai_scroll = ttk.Scrollbar(ai_text_wrap.body, command=self.ai_text.yview)
         ai_scroll.pack(side="right", fill="y")
         self.ai_text.config(yscrollcommand=ai_scroll.set)
-        ttk.Button(bottom, text="设置", command=self.open_settings).pack(side="right", padx=10)
-        self.btn_wrong = ttk.Button(bottom, text="重做错题", style="Soft.TButton",
-                                    command=self.on_wrong)
+        self._button(bottom, "设置", self.open_settings).pack(side="right", padx=10)
+        self.btn_wrong = self._button(bottom, "重做错题", self.on_wrong, "soft")
         self.btn_wrong.pack(side="left", padx=10)
-        self.btn_restart = ttk.Button(bottom, text="重新刷题", style="Soft.TButton",
-                                      command=self.on_restart)
+        self.btn_restart = self._button(bottom, "重新刷题", self.on_restart, "soft")
         self.btn_restart.pack(side="left", padx=10)
         self.btn_restart.config(state="disabled")
-        self.btn_return = ttk.Button(bottom, text="返回正常练习", style="Accent.TButton",
-                                     command=self.on_return)
-        self.btn_home = ttk.Button(bottom, text="返回题库", style="Soft.TButton",
-                                   command=self.show_bank)
+        self.btn_return = self._button(bottom, "返回正常练习", self.on_return, "accent")
+        self.btn_home = self._button(bottom, "返回题库", self.show_bank, "soft")
         self.btn_home.pack(side="left", padx=10)
         self.status_label = tk.Label(bottom, text="", bg=BG_APP, fg=FG_MUTED,
                                      font=_font(10))
@@ -997,25 +1012,27 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
         # ============ 导航页「我的题库」 ============
         # 顶部标题行：左标题 + 右「清空全部」
         bank_head = tk.Frame(self.bank_view, bg=BG_APP)
-        bank_head.pack(fill="x", padx=40, pady=(32, 20))
+        bank_head.pack(fill="x", padx=theme.SP_8, pady=(theme.SP_8, theme.SP_4))
         bank_title_row = tk.Frame(bank_head, bg=BG_APP)
         bank_title_row.pack(fill="x")
         tk.Label(bank_title_row, text="我的题库", bg=BG_APP, fg=FG_TEXT,
-                 font=_font(18, "bold")).pack(side="left")
+                 font=_head_font(theme.FS_H1, "bold")).pack(side="left")
         #self.btn_clear_all = ttk.Button(bank_title_row, text="清空全部",
         #                                style="Danger.TButton",
         #                                command=self._delete_all)
         #self.btn_clear_all.pack(side="right", anchor="s")
         self.bank_subtitle = tk.Label(bank_head, text="", bg=BG_APP, fg=FG_MUTED,
-                                      font=_font(10), anchor="w", justify="left")
-        self.bank_subtitle.pack(anchor="w", pady=(4, 0))
+                                      font=_font(theme.FS_META), anchor="w",
+                                      justify="left")
+        self.bank_subtitle.pack(anchor="w", pady=(theme.SP_1, 0))
 
         # 可滚动区域（题库多时纵向滚动）
         bank_canvas = tk.Canvas(self.bank_view, highlightthickness=0, bg=BG_APP)
-        bank_canvas.pack(fill="both", expand=True, padx=40, pady=(8, 24))
+        bank_canvas.pack(fill="both", expand=True, padx=theme.SP_8,
+                         pady=(theme.SP_1, theme.SP_6))
         bank_sb = ttk.Scrollbar(self.bank_view, orient="vertical",
                                 command=bank_canvas.yview)
-        bank_sb.pack(side="right", fill="y", pady=(8, 16))
+        bank_sb.pack(side="right", fill="y", pady=(0, theme.SP_4))
         bank_canvas.config(yscrollcommand=bank_sb.set)
         self.bank_body = tk.Frame(bank_canvas, bg=BG_APP)
         self._bank_win = bank_canvas.create_window((0, 0), window=self.bank_body,
@@ -1044,6 +1061,9 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
 
         self.bank_cards = []   # 每张卡片的 frame（重建时清空）
 
+        # AI 解析栏按上次的状态落地（收起时题目区铺满）
+        self._apply_ai_panel_state()
+
         # 初始显示导航页
         self.bank_view.pack(fill="both", expand=True)
         self._current_view = "bank"
@@ -1061,7 +1081,9 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
         else:
             self.bank_view.pack_forget()
             self.quiz_view.pack(fill="both", expand=True)
-            self.quiz_header.pack(fill="x", padx=24, pady=(12, 8), before=self.quiz_view)
+            self.quiz_header.pack(fill="x", padx=theme.SP_6,
+                                  pady=(theme.SP_3, theme.SP_2),
+                                  before=self.quiz_view)
         self._current_view = view
         if view == "quiz":
             self.q_canvas.focus_set()
@@ -1103,7 +1125,8 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
         body.pack(fill="both", expand=True)
         body.columnconfigure(1, weight=1)
         body.rowconfigure(1, weight=1)
-        title = tk.Label(body, text=f"{sheet} · 收藏题", bg=BG_APP, fg=FG_TEXT, font=_font(18, "bold"))
+        title = tk.Label(body, text=f"{sheet} · 收藏题", bg=BG_APP, fg=FG_TEXT,
+                         font=_head_font(18, "bold"))
         title.grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 15))
         listing = ttk.Treeview(body, columns=("stem",), show="headings", selectmode="browse")
         listing.heading("stem", text="题库 · 题目")
@@ -1146,7 +1169,7 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
                 if self.order:
                     q = self._q_at(self.pos)
                     self.btn_favorite.config(text="★ 已收藏 · 取消" if self.db.is_favorite(q.qid) else "☆ 收藏题目")
-        remove = ttk.Button(body, text="取消收藏", command=unstar)
+        remove = self._button(body, "取消收藏", unstar, "danger")
         remove.grid(row=2, column=1, sticky="w", padx=16, pady=(12, 0))
         listing.bind("<<TreeviewSelect>>", select)
         refresh()
@@ -1177,6 +1200,32 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
             "finished": done >= len(order),
         }
 
+    def _bind_card_hover(self, card):
+        """整块卡片（含所有后代）共享同一套悬停描边。
+
+        Tk 的 <Enter>/<Leave> 只发给鼠标正下方那个控件，不冒泡到父级，
+        所以必须递归绑定到每个后代，否则鼠标移到卡片里的文字上就会闪回未选中态。
+        """
+        def enter(_e):
+            try:
+                card.config(highlightbackground=ACCENT)
+            except tk.TclError:
+                pass
+
+        def leave(_e):
+            try:
+                card.config(highlightbackground=BORDER)
+            except tk.TclError:
+                pass
+
+        def walk(w):
+            w.bind("<Enter>", enter)
+            w.bind("<Leave>", leave)
+            for child in w.winfo_children():
+                walk(child)
+
+        walk(card)
+
     def _render_bank(self):
         """重建「我的题库」导航页"""
         for w in self.bank_cards:
@@ -1203,108 +1252,127 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
             wrong_n = len(self.db.wrong_list(sheet))
             favorite_n = len(self.db.favorite_list(sheet))
 
-            card = tk.Frame(self.bank_body, bg=BG_CARD, highlightthickness=1,
-                            highlightbackground=BORDER)
+            card = widgets.RoundedFrame(self.bank_body, radius=theme.R_LG,
+                                        bg=BG_CARD, border=BORDER,
+                                        shadow=CARD_SHADOW)
             self.bank_cards.append(card)
-            card.pack(fill="x", pady=(0, 12))
+            card.pack(fill="x", pady=(0, theme.SP_3))
 
             # 卡片内：左信息 + 右按钮
-            info = tk.Frame(card, bg=BG_CARD)
-            info.pack(side="left", fill="both", expand=True, padx=18, pady=16)
-            # 试卷名 + 题数
+            info = tk.Frame(card.body, bg=BG_CARD)
+            info.pack(side="left", fill="both", expand=True,
+                      padx=theme.SP_5, pady=theme.SP_4)
+            # 试卷名
             tk.Label(info, text=sheet, bg=BG_CARD, fg=FG_TEXT,
-                     font=_font(12, "bold"), anchor="w",
+                     font=_head_font(theme.FS_TITLE + 2, "bold"), anchor="w",
                      wraplength=520, justify="left").pack(anchor="w")
-            tk.Label(info, text=f"共 {n} 题   ·   " + " / ".join(parts),
-                     bg=BG_CARD, fg=FG_MUTED, font=_font(10),
-                     anchor="w").pack(anchor="w", pady=(4, 0))
-            tk.Label(info, text=f"错题 {wrong_n}　·　收藏 {favorite_n}",
-                     bg=BG_CARD, fg=FG_MUTED, font=_font(10),
-                     anchor="w").pack(anchor="w", pady=(4, 0))
+            # 一行胶囊：题数 + 题型分布
+            stats = tk.Frame(info, bg=BG_CARD)
+            stats.pack(anchor="w", pady=(theme.SP_2, 0))
+            pal = self._palette()
+            for label in [f"共 {n} 题"] + parts:
+                widgets.Pill(stats, label, pal, fg=FG_MUTED, bg=BG_SUBTLE,
+                             font=_font(theme.FS_MICRO), padx=9,
+                             pady=3).pack(side="left", padx=(0, theme.SP_1))
+            counts = tk.Frame(info, bg=BG_CARD)
+            counts.pack(anchor="w", pady=(theme.SP_2, 0))
+            widgets.Pill(counts, f"错题 {wrong_n}", pal, fg=FG_MUTED,
+                         bg=BG_SUBTLE, font=_font(theme.FS_MICRO), padx=9,
+                         pady=3).pack(side="left", padx=(0, theme.SP_1))
+            widgets.Pill(counts, f"收藏 {favorite_n}", pal, fg=FG_MUTED,
+                         bg=BG_SUBTLE, font=_font(theme.FS_MICRO), padx=9,
+                         pady=3).pack(side="left")
 
             # 进度条
             if prog:
                 pct = prog["done"] / prog["total"] * 100 if prog["total"] else 0
                 acc = (prog["correct"] / prog["done"] * 100) if prog["done"] else 0
-                prog_lbl = "已完成" if prog["finished"] else "进行中"
                 tk.Label(info,
-                         text=f"{prog_lbl}　{prog['done']} / {prog['total']} 题 · 正确 {prog['correct']} · 准确率 {acc:.0f}%",
-                         bg=BG_CARD, fg=(C_OK if prog["finished"] else ACCENT),
-                         font=_font(10, "bold"), anchor="w").pack(anchor="w", pady=(8, 2))
-                bar = ttk.Progressbar(info, length=300, maximum=100,
-                                      value=pct, orient="horizontal")
+                         text=f"{prog['done']} / {prog['total']} 题 · 正确 {prog['correct']} · 准确率 {acc:.0f}%",
+                         bg=BG_CARD, fg=FG_MUTED, font=_font(theme.FS_META),
+                         anchor="w").pack(anchor="w", pady=(theme.SP_3, theme.SP_1))
+                bar = widgets.RoundProgress(info, value=pct, maximum=100,
+                                            length=300, palette=self._palette())
                 bar.pack(anchor="w")
             else:
                 tk.Label(info, text="尚未开始", bg=BG_CARD, fg=FG_FAINT,
-                         font=_font(10), anchor="w").pack(anchor="w", pady=(8, 0))
+                         font=_font(theme.FS_META), anchor="w").pack(
+                             anchor="w", pady=(theme.SP_3, 0))
+            self._bind_card_hover(card)
 
             # 右侧按钮：继续 / 开始 + 删除
             # 固定按钮列宽度，保证所有卡片右按钮列对齐（否则单按钮卡片
             # 的按钮会按文字宽度自适应，比双按钮卡片的列宽更宽，右缘不齐）
-            btn_frame = tk.Frame(card, bg=BG_CARD)
+            btn_frame = tk.Frame(card.body, bg=BG_CARD)
             btn_frame.pack(side="right", fill="y", padx=(0, 18), pady=16)
             label = "继续刷题" if prog and not prog["finished"] else \
                     ("再练一遍" if prog and prog["finished"] else "开始刷题")
-            ttk.Button(btn_frame, text=label, style="Accent.TButton",
-                       width=23,
-                       command=lambda s=sheet: self._open_sheet(s)).pack(
-                           fill="x", pady=(0, 6))
+            self._button(btn_frame, label,
+                         lambda s=sheet: self._open_sheet(s), "accent",
+                         width=23).pack(fill="x", pady=(0, 6))
 
             collection_row = tk.Frame(btn_frame, bg=BG_CARD)
             collection_row.pack(fill="x", pady=(0, 6))
-            ttk.Button(collection_row, text=f"错题 {wrong_n}", width=10,
-                       style="Soft.TButton",
-                       command=lambda s=sheet: self._open_wrong(s)).pack(
-                           side="left", fill="x", expand=True, padx=(0, 3))
-            ttk.Button(collection_row, text=f"收藏 {favorite_n}", width=10,
-                       style="Soft.TButton",
-                       command=lambda s=sheet: self.show_favorites(s)).pack(
-                           side="left", fill="x", expand=True, padx=(3, 0))
-            # 删除按钮（红色危险色，小一号）；撑满按钮列宽，与上方主按钮左右对齐
-            
-            del_btn = ttk.Button(btn_frame, text="删除", style="Danger.TButton",
-                                 command=lambda s=sheet: self._delete_sheet(s))
+            self._button(collection_row, f"错题 {wrong_n}",
+                         lambda s=sheet: self._open_wrong(s), "soft",
+                         width=10).pack(side="left", fill="x", expand=True,
+                                        padx=(0, 3))
+            self._button(collection_row, f"收藏 {favorite_n}",
+                         lambda s=sheet: self.show_favorites(s), "soft",
+                         width=10).pack(side="left", fill="x", expand=True,
+                                        padx=(3, 0))
+            # 删除按钮（悬停转危险色，小一号）；撑满按钮列宽，与上方主按钮左右对齐
+            del_btn = self._button(btn_frame, "删除",
+                                   lambda s=sheet: self._delete_sheet(s), "danger")
             del_btn.pack(fill="x")
 
         # 2) 导入卡片
-        imp = tk.Frame(self.bank_body, bg=BG_CARD, highlightthickness=1,
-                       highlightbackground=BORDER)
+        imp = widgets.RoundedFrame(self.bank_body, radius=theme.R_LG,
+                                   bg=BG_CARD, border=BORDER,
+                                   shadow=CARD_SHADOW)
         self.bank_cards.append(imp)
-        imp.pack(fill="x", pady=(4, 12))
-        imp_info = tk.Frame(imp, bg=BG_CARD)
-        imp_info.pack(side="left", fill="both", expand=True, padx=18, pady=16)
+        imp.pack(fill="x", pady=(theme.SP_1, theme.SP_3))
+        imp_info = tk.Frame(imp.body, bg=BG_CARD)
+        imp_info.pack(side="left", fill="both", expand=True,
+                      padx=theme.SP_5, pady=theme.SP_4)
         tk.Label(imp_info, text="导入新题库", bg=BG_CARD, fg=FG_TEXT,
-                 font=_font(12, "bold"), anchor="w").pack(anchor="w")
+                 font=_head_font(theme.FS_TITLE + 2, "bold"),
+                 anchor="w").pack(anchor="w")
         tk.Label(imp_info,
                  text="从 Excel（.xlsx / .xls）导入，每个 sheet 是一套试卷\n支持单选 / 多选 / 判断，导入后永久保存",
-                 bg=BG_CARD, fg=FG_MUTED, font=_font(10),
-                 anchor="w", justify="left").pack(anchor="w", pady=(4, 0))
-        imp_btn = tk.Frame(imp, bg=BG_CARD, width=120)
-        imp_btn.pack(side="right", fill="y", padx=(0, 18), pady=16)
+                 bg=BG_CARD, fg=FG_MUTED, font=_font(theme.FS_META),
+                 anchor="w", justify="left").pack(anchor="w", pady=(theme.SP_2, 0))
+        imp_btn = tk.Frame(imp.body, bg=BG_CARD, width=120)
+        imp_btn.pack(side="right", fill="y", padx=(0, theme.SP_5),
+                     pady=theme.SP_4)
         imp_btn.pack_propagate(False)
-        ttk.Button(imp_btn, text="导入题库", style="Accent.TButton",
-                   command=self.on_import).pack(anchor="center")
+        self._button(imp_btn, "导入题库", self.on_import,
+                     "accent").pack(anchor="center")
+        self._bind_card_hover(imp)
 
         # 2b) 智能筛题卡片
-        flt = tk.Frame(self.bank_body, bg=BG_CARD, highlightthickness=1,
-                       highlightbackground=BORDER)
+        flt = widgets.RoundedFrame(self.bank_body, radius=theme.R_LG,
+                                   bg=BG_CARD, border=BORDER,
+                                   shadow=CARD_SHADOW)
         self.bank_cards.append(flt)
         # 智能筛题入口暂时隐藏，保留原功能实现。
-        flt_info = tk.Frame(flt, bg=BG_CARD)
-        flt_info.pack(side="left", fill="both", expand=True, padx=18, pady=16)
+        flt_info = tk.Frame(flt.body, bg=BG_CARD)
+        flt_info.pack(side="left", fill="both", expand=True,
+                      padx=theme.SP_5, pady=theme.SP_4)
         tk.Label(flt_info, text="智能筛题", bg=BG_CARD, fg=FG_TEXT,
-                 font=_font(12, "bold"), anchor="w").pack(anchor="w")
+                 font=_head_font(theme.FS_TITLE + 2, "bold"),
+                 anchor="w").pack(anchor="w")
         tk.Label(flt_info,
                  text="按背题规则筛选：判断错题、多选错误选项全含关键词、单选唯一最长正确答案的题剔除\n"
                       "剩下的存为新试卷「背题库」，方便集中背诵",
-                 bg=BG_CARD, fg=FG_MUTED, font=_font(10),
-                 anchor="w", justify="left").pack(anchor="w", pady=(4, 0))
-        flt_btn = tk.Frame(flt, bg=BG_CARD, width=120)
-        flt_btn.pack(side="right", fill="y", padx=(0, 18), pady=16)
+                 bg=BG_CARD, fg=FG_MUTED, font=_font(theme.FS_META),
+                 anchor="w", justify="left").pack(anchor="w", pady=(theme.SP_2, 0))
+        flt_btn = tk.Frame(flt.body, bg=BG_CARD, width=120)
+        flt_btn.pack(side="right", fill="y", padx=(0, theme.SP_5),
+                     pady=theme.SP_4)
         flt_btn.pack_propagate(False)
-        ttk.Button(flt_btn, text="智能筛题",
-                   style="Accent.TButton" if self.sheet_names else "Soft.TButton",
-                   command=self.on_smart_filter).pack(anchor="center")
+        self._button(flt_btn, "智能筛题", self.on_smart_filter,
+                     "accent" if self.sheet_names else "soft").pack(anchor="center")
 
         # 重建卡片后，把滚轮/中键滚动手势绑到 bank_body 及所有后代控件，
         # 否则鼠标停在卡片上时滚轮事件被内层 widget 吃掉，导致无法滚动
@@ -1558,23 +1626,29 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
         self._apply_color_theme(self._theme_mode, refresh_widgets=False)
         self._auto_next_delay = cfg["auto_next_delay"]
         self._default_order = cfg["default_order"]
+        self._ai_collapsed = bool(cfg.get("ai_panel_collapsed", False))
 
     def _apply_color_theme(self, mode, refresh_widgets=True, accent_id=None):
         """像编辑器主题一样切换背景、表面、文字、边框和控件配色。"""
         global BG_APP, BG_CARD, BG_SUBTLE, BORDER, BORDER_SOFT
+        global BG_SIDE, SHADOW
         global FG_TEXT, FG_MUTED, FG_FAINT, FG_ON_ACCENT
         global ACCENT, ACCENT_HOVER, ACCENT_ACTIVE, ACCENT_SOFT
         global C_UNANSWERED, C_TEXT_ON_LIGHT, C_OK_SOFT, C_BAD_SOFT, C_CURRENT
+        global C_OK, C_BAD
+        global BTN_SOFT, BTN_SOFT_HOVER
         resolved = settings_mod.resolve_theme(mode)
         palette = dict(settings_mod.THEME_PALETTES[resolved])
         # 主题色：优先用指定 id，否则用当前配置
         if accent_id is None:
-            accent_id = getattr(self, "_settings_cfg", {}).get("accent", "midnight")
-        palette.update(settings_mod.accent_colors(accent_id))
-        names = ("BG_APP", "BG_CARD", "BG_SUBTLE", "BORDER", "BORDER_SOFT",
+            accent_id = getattr(self, "_settings_cfg", {}).get("accent", "plum")
+        palette.update(settings_mod.accent_colors(accent_id, resolved))
+        names = ("BG_APP", "BG_CARD", "BG_SUBTLE", "BG_SIDE", "SHADOW",
+                 "BORDER", "BORDER_SOFT",
                  "FG_TEXT", "FG_MUTED", "FG_FAINT", "FG_ON_ACCENT", "ACCENT",
                  "ACCENT_HOVER", "ACCENT_ACTIVE", "ACCENT_SOFT", "C_UNANSWERED",
-                 "C_TEXT_ON_LIGHT", "C_OK_SOFT", "C_BAD_SOFT")
+                 "C_TEXT_ON_LIGHT", "C_OK_SOFT", "C_BAD_SOFT", "C_OK", "C_BAD",
+                 "BTN_SOFT", "BTN_SOFT_HOVER")
         old = {name: globals()[name] for name in names}
         for name in names:
             globals()[name] = palette[name]
@@ -1583,17 +1657,29 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
         self._resolved_theme = resolved
         self._reconfigure_styles()
         if refresh_widgets and hasattr(self, "root"):
-            background_names = ("BG_APP", "BG_CARD", "BG_SUBTLE", "BORDER", "BORDER_SOFT",
-                                "ACCENT", "ACCENT_HOVER", "ACCENT_ACTIVE", "ACCENT_SOFT",
-                                "C_UNANSWERED", "C_OK_SOFT", "C_BAD_SOFT")
+            background_names = ("BG_APP", "BG_CARD", "BG_SUBTLE", "BG_SIDE",
+                                "SHADOW", "BORDER", "BORDER_SOFT",
+                                "ACCENT", "ACCENT_HOVER", "ACCENT_ACTIVE",
+                                "ACCENT_SOFT", "C_OK", "C_BAD",
+                                "C_UNANSWERED", "C_OK_SOFT", "C_BAD_SOFT",
+                                "BTN_SOFT", "BTN_SOFT_HOVER")
             foreground_names = ("FG_TEXT", "FG_MUTED", "FG_FAINT", "FG_ON_ACCENT",
-                                "C_TEXT_ON_LIGHT", "ACCENT")
+                                "C_TEXT_ON_LIGHT", "ACCENT", "C_OK", "C_BAD")
             bg_map = {old[name].lower(): palette[name] for name in background_names}
             fg_map = {old[name].lower(): palette[name] for name in foreground_names}
             self.root.configure(bg=BG_APP)
             self._recolor_widget_tree(self.root, bg_map, fg_map)
             if hasattr(self, "_paint_matrix"):
-                self._paint_matrix()
+                # 必须整块重建：_paint_matrix 只重画"颜色变了"的格子，
+                # 换主题后旧色仍记在 _cell_colors 里，会整片留着上个主题的底色。
+                self._cell_colors = []
+                if self.order:
+                    self._rebuild_matrix()
+            if hasattr(self, "_refresh_option_rows"):
+                self._refresh_option_rows()
+            if hasattr(self, "_repaint_canvas_bits"):
+                self._repaint_canvas_bits()
+            self._repolish_widgets()
             self.root.update_idletasks()
 
     def _recolor_widget_tree(self, widget, bg_map, fg_map):
@@ -1606,6 +1692,10 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
             available = widget.configure()
             changes = {}
             for option in background_options + foreground_options:
+                # 预设色块展示的是固定候选色，不是当前界面的主题色。
+                if getattr(widget, "_fixed_swatch_colors", False) and option in (
+                        "background", "foreground"):
+                    continue
                 if option not in available:
                     continue
                 value = str(widget.cget(option)).lower()
@@ -1635,67 +1725,356 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
         """重设 ttk 样式（依赖全局颜色常量，调用后需 root.update 生效）。"""
         style = ttk.Style()
         style.configure("TFrame", background=BG_CARD)
-        style.configure("TLabel", background=BG_CARD, foreground=FG_TEXT, font=_font(10))
-        style.configure("Treeview", font=_font(11), rowheight=40, background=BG_CARD,
-                        fieldbackground=BG_CARD, foreground=FG_TEXT, borderwidth=0)
-        style.configure("Treeview.Heading", font=_font(10, "bold"), background=BG_SUBTLE,
-                        foreground=FG_TEXT)
-        # --- 通用按钮 ---
-        style.configure("TButton", font=_font(10), padding=(12, 7), borderwidth=0,
-                        relief="flat", background=BG_CARD, foreground=FG_TEXT,
-                        lightcolor=BG_CARD, darkcolor=BG_CARD,
+        style.configure("TLabel", background=BG_CARD, foreground=FG_TEXT,
+                        font=_font(theme.FS_META))
+        style.configure("Treeview", font=_font(theme.FS_BODY), rowheight=40,
+                        background=BG_CARD, fieldbackground=BG_CARD,
+                        foreground=FG_TEXT, borderwidth=0)
+        style.configure("Treeview.Heading", font=_font(theme.FS_META, "bold"),
+                        background=BG_SUBTLE, foreground=FG_TEXT)
+        # --- 通用按钮（浅灰填充，不用描边——clam 下描边画不出来） ---
+        style.configure("TButton", font=_font(theme.FS_BODY), padding=(14, 9),
+                        borderwidth=0, relief="flat", background=BTN_SOFT,
+                        foreground=FG_TEXT, lightcolor=BTN_SOFT,
+                        darkcolor=BTN_SOFT,
                         focuscolor=ACCENT_SOFT, focusthickness=0)
         style.map("TButton",
-                  background=[("active", BG_SUBTLE), ("disabled", BG_SUBTLE)],
+                  background=[("active", BTN_SOFT_HOVER), ("disabled", BG_SUBTLE)],
                   foreground=[("disabled", FG_FAINT)])
         # 主题按钮
-        style.configure("Accent.TButton", font=_font(10, "bold"), padding=(14, 8),
-                        borderwidth=0, relief="flat", background=ACCENT,
-                        foreground=FG_ON_ACCENT, lightcolor=ACCENT, darkcolor=ACCENT,
+        style.configure("Accent.TButton", font=_font(theme.FS_BODY, "bold"),
+                        padding=(16, 10), borderwidth=0, relief="flat",
+                        background=ACCENT, foreground=FG_ON_ACCENT,
+                        lightcolor=ACCENT, darkcolor=ACCENT,
                         focuscolor=ACCENT_SOFT, focusthickness=0)
         style.map("Accent.TButton",
                   background=[("active", ACCENT_HOVER), ("pressed", ACCENT_ACTIVE),
                              ("disabled", BG_SUBTLE)],
                   foreground=[("disabled", FG_FAINT)])
-        # 次级/幽灵按钮
-        style.configure("Soft.TButton", font=_font(10), padding=(12, 7),
-                        borderwidth=1, relief="flat", background=BG_CARD,
-                        foreground=FG_TEXT, lightcolor=BORDER, darkcolor=BORDER,
+        # 次级按钮（浅灰填充，层级比主按钮低一档）
+        style.configure("Soft.TButton", font=_font(theme.FS_BODY), padding=(14, 9),
+                        borderwidth=0, relief="flat", background=BTN_SOFT,
+                        foreground=FG_TEXT, lightcolor=BTN_SOFT,
+                        darkcolor=BTN_SOFT,
                         focuscolor=ACCENT_SOFT, focusthickness=0)
-        style.map("Soft.TButton", background=[("active", ACCENT_SOFT), ("disabled", BG_SUBTLE)],
+        style.map("Soft.TButton",
+                  background=[("active", BTN_SOFT_HOVER), ("disabled", BG_SUBTLE)],
                   foreground=[("disabled", FG_FAINT)])
-        # 删除按钮（灰色弱化）
-        style.configure("Danger.TButton", font=_font(9), padding=(10, 5),
-                        borderwidth=1, relief="flat", background=BG_CARD,
-                        foreground=FG_MUTED, lightcolor=BORDER, darkcolor=BORDER,
-                        focuscolor=BG_SUBTLE, focusthickness=0)
+        # 删除按钮（常态弱化，悬停才转成危险色，避免误点）
+        style.configure("Danger.TButton", font=_font(theme.FS_META),
+                        padding=(10, 6), borderwidth=0, relief="flat",
+                        background=BTN_SOFT, foreground=FG_MUTED,
+                        lightcolor=BTN_SOFT, darkcolor=BTN_SOFT,
+                        focuscolor=BTN_SOFT_HOVER, focusthickness=0)
         style.map("Danger.TButton",
-                  background=[("active", BG_SUBTLE), ("disabled", BG_SUBTLE)],
-                  foreground=[("active", FG_MUTED), ("disabled", FG_FAINT)])
+                  background=[("active", C_BAD_SOFT), ("disabled", BG_SUBTLE)],
+                  foreground=[("active", C_BAD), ("disabled", FG_FAINT)])
         # Treeview 选中色
         style.map("Treeview", background=[("selected", ACCENT_SOFT)], foreground=[("selected", FG_TEXT)])
-        style.configure("Header.TLabel", font=_font(18, "bold"), background=BG_APP, foreground=FG_TEXT)
-        style.configure("Sub.TLabel", font=_font(10), background=BG_APP, foreground=FG_MUTED)
-        style.configure("SubCard.TLabel", font=_font(10), background=BG_SUBTLE, foreground=FG_MUTED)
-        style.configure("Question.TLabel", font=_font(16), background=BG_CARD, foreground=FG_TEXT)
-        style.configure("Explain.TLabel", font=_font(11), background=BG_SUBTLE, foreground=FG_MUTED)
-        style.configure("Ok.TLabel", font=_font(11, "bold"), background=C_OK_SOFT, foreground=C_OK)
-        style.configure("Bad.TLabel", font=_font(11, "bold"), background=C_BAD_SOFT, foreground=C_BAD)
-        style.configure("Option.TCheckbutton", font=_font(11), background=BG_CARD, foreground=FG_TEXT)
+        style.configure("Header.TLabel", font=_font(theme.FS_H1, "bold"),
+                        background=BG_APP, foreground=FG_TEXT)
+        style.configure("Sub.TLabel", font=_font(theme.FS_META), background=BG_APP,
+                        foreground=FG_MUTED)
+        style.configure("SubCard.TLabel", font=_font(theme.FS_META),
+                        background=BG_SUBTLE, foreground=FG_MUTED)
+        style.configure("Question.TLabel", font=_font(theme.FS_Q),
+                        background=BG_CARD, foreground=FG_TEXT, wraplength=620,
+                        justify="left")
+        style.configure("Explain.TLabel", font=_font(theme.FS_BODY),
+                        background=BG_SUBTLE, foreground=FG_MUTED,
+                        wraplength=620, justify="left", padding=(theme.SP_3, theme.SP_2 + 2))
+        style.configure("Ok.TLabel", font=_font(theme.FS_BODY, "bold"),
+                        background=C_OK_SOFT, foreground=C_OK,
+                        padding=(theme.SP_3, theme.SP_2 + 2))
+        style.configure("Bad.TLabel", font=_font(theme.FS_BODY, "bold"),
+                        background=C_BAD_SOFT, foreground=C_BAD,
+                        padding=(theme.SP_3, theme.SP_2 + 2))
+        style.configure("Option.TCheckbutton", font=_font(theme.FS_BODY),
+                        background=BG_CARD, foreground=FG_TEXT,
+                        padding=(theme.SP_2, theme.SP_1))
+        # 输入框同样套了圆角壳，这里去掉 clam 的直角边框
+        style.configure("TEntry", fieldbackground=BG_CARD, foreground=FG_TEXT,
+                        bordercolor=BG_CARD, lightcolor=BG_CARD,
+                        darkcolor=BG_CARD, insertcolor=FG_TEXT, borderwidth=0)
+        style.map("TEntry", fieldbackground=[("disabled", BG_SUBTLE)],
+                  foreground=[("disabled", FG_FAINT)],
+                  bordercolor=[("focus", BG_CARD)])
+        # 下拉框外面套了圆角壳，这里把 clam 自带的直角边框抹掉、禁用态也用卡片底色
         style.configure("TCombobox", fieldbackground=BG_CARD, background=BG_CARD,
-                        foreground=FG_TEXT, arrowcolor=ACCENT, bordercolor=BORDER,
-                        lightcolor=BG_CARD, darkcolor=BG_CARD, selectbackground=ACCENT,
+                        foreground=FG_TEXT, arrowcolor=ACCENT, bordercolor=BG_CARD,
+                        lightcolor=BG_CARD, darkcolor=BG_CARD, borderwidth=0,
+                        selectbackground=ACCENT,
                         selectforeground=FG_ON_ACCENT, padding=5)
-        style.map("TCombobox", fieldbackground=[("readonly", BG_CARD), ("disabled", BG_SUBTLE)],
+        style.map("TCombobox", fieldbackground=[("readonly", BG_CARD), ("disabled", BG_CARD)],
                   foreground=[("readonly", FG_TEXT), ("disabled", FG_FAINT)],
-                  arrowcolor=[("readonly", ACCENT)], bordercolor=[("focus", ACCENT)])
+                  arrowcolor=[("readonly", ACCENT), ("disabled", FG_FAINT)],
+                  bordercolor=[("focus", BG_CARD)])
         style.configure("TProgressbar", background=ACCENT, troughcolor=BG_SUBTLE,
-                        bordercolor=BORDER, lightcolor=ACCENT, darkcolor=ACCENT)
+                        bordercolor=BORDER, lightcolor=ACCENT, darkcolor=ACCENT,
+                        thickness=6)
+        style.map("TProgressbar", background=[("disabled", BORDER)])
         style.configure("Vertical.TScrollbar", background=BORDER, troughcolor=BG_APP,
-                        bordercolor=BG_APP, arrowcolor=FG_MUTED, relief="flat")
+                        bordercolor=BG_APP, arrowcolor=FG_MUTED, relief="flat",
+                        arrowsize=12)
+        style.map("Vertical.TScrollbar",
+                  background=[("active", FG_FAINT), ("pressed", FG_FAINT)])
+        # 侧栏当前项（浅底 + 主题色文字，替代"看起来都一样"的一组按钮）
+        style.configure("SideActive.TButton", font=_font(theme.FS_BODY, "bold"),
+                        padding=(14, 9), borderwidth=1, relief="flat",
+                        background=ACCENT_SOFT, foreground=FG_TEXT,
+                        lightcolor=ACCENT_SOFT, darkcolor=ACCENT_SOFT,
+                        focuscolor=ACCENT_SOFT, focusthickness=0)
+        style.map("SideActive.TButton",
+                  background=[("active", ACCENT_SOFT), ("disabled", BG_SUBTLE)],
+                  foreground=[("active", FG_TEXT), ("disabled", FG_FAINT)])
         # 底部导航按钮
-        style.configure("Nav.Soft.TButton", font=_font(10), padding=(16, 10))
-        style.configure("Nav.Accent.TButton", font=_font(10, "bold"), padding=(16, 10))
+        style.configure("Nav.Soft.TButton", font=_font(theme.FS_BODY), padding=(18, 11))
+        style.configure("Nav.Accent.TButton",
+                        font=_font(theme.FS_BODY, "bold"), padding=(18, 11))
+
+    # ---------------- 字体缩放重刷 ----------------
+
+    def _rescale_fonts(self, old_scale: float):
+        """把已创建的 tk 控件字体按 FONT_SCALE（old_scale → 当前值）等比缩放。
+
+        _reconfigure_styles 只重设 ttk 样式；主界面大量 tk 原生控件
+        （题干、选项、导航、设置窗口等）的字体是创建时用 _font() 定死的元组，
+        保存「字体大小」后必须在这里按比例重算，否则界面字号会参差不齐。
+
+        徽标 / 矩阵序号是 Canvas 图元，不走控件 font，由调用方重建
+        （_render / _rebuild_matrix）刷新。
+        """
+        if old_scale == FONT_SCALE:
+            return
+        ratio = FONT_SCALE / old_scale if old_scale else 1.0
+        if abs(ratio - 1.0) < 1e-6:
+            return
+
+        def parse_spec(spec: str):
+            """'Microsoft YaHei UI 12 bold' → (family, size, weight_str)。"""
+            parts = spec.split()
+            for i in range(len(parts) - 1, -1, -1):
+                try:
+                    size = float(parts[i])
+                except ValueError:
+                    continue
+                return " ".join(parts[:i]), size, " ".join(parts[i + 1:])
+            return None
+
+        def walk(widget):
+            try:
+                available = widget.configure()
+            except tk.TclError:
+                return
+            if "font" in available:
+                try:
+                    spec = widget.cget("font")
+                except tk.TclError:
+                    spec = None
+                # 命名字体（Tk*）是样式系统托管的，跳过；字符串字体才按比例缩放
+                if isinstance(spec, str) and not spec.startswith("Tk"):
+                    parsed = parse_spec(spec)
+                    if parsed:
+                        family, size, weight = parsed
+                        new_size = max(1, round(size * ratio))
+                        try:
+                            widget.configure(font=(family, new_size, weight))
+                        except tk.TclError:
+                            pass
+            try:
+                children = widget.winfo_children()
+            except tk.TclError:
+                return
+            for child in children:
+                walk(child)
+
+        walk(self.root)
+        self.root.update_idletasks()
+
+    # ---------------- 配色快照 ----------------
+
+    def _palette(self) -> dict:
+        """当前主题的一套颜色快照，交给组件自己绘制（切换主题时重画即可）。"""
+        return {
+            "bg": BG_CARD, "subtle": BG_SUBTLE, "border": BORDER,
+            "text": FG_TEXT, "muted": FG_MUTED, "faint": FG_FAINT,
+            "accent": ACCENT, "accent_soft": ACCENT_SOFT,
+            "accent_hover": ACCENT_HOVER, "accent_active": ACCENT_ACTIVE,
+            "on_accent": FG_ON_ACCENT, "border_soft": BORDER_SOFT,
+            "btn_soft": BTN_SOFT, "btn_soft_hover": BTN_SOFT_HOVER,
+            "ok": C_OK, "ok_soft": C_OK_SOFT,
+            "bad": C_BAD, "bad_soft": C_BAD_SOFT,
+            # 侧栏当前项要做成"浮起的一张卡片"，所以要能单独拿到卡片色和侧栏色
+            "card": BG_CARD, "side": BG_SIDE,
+            "shadow": SHADOW, "track": BORDER,
+        }
+
+    # ---------------- AI 解析栏：收起 / 展开 ----------------
+
+    def _apply_ai_panel_state(self):
+        """按 self._ai_collapsed 落地布局：收起时把整列让给题目区。
+
+        grid_remove 只让控件不占位，列本身的 minsize 仍会撑出空白，所以列宽
+        要一起改；恢复时再设回来。
+        """
+        collapsed = bool(getattr(self, "_ai_collapsed", False))
+        try:
+            if collapsed:
+                self._inner.columnconfigure(2, weight=0, minsize=0)
+                self.ai_panel.grid_remove()
+                self.btn_ai_show.pack(side="right")
+            else:
+                self._inner.columnconfigure(2, weight=1, minsize=AI_COL_MIN)
+                self.ai_panel.grid()
+                self.btn_ai_show.pack_forget()
+        except (tk.TclError, AttributeError):
+            pass
+
+    def _set_ai_collapsed(self, collapsed, persist=True):
+        self._ai_collapsed = bool(collapsed)
+        self._apply_ai_panel_state()
+        if persist:
+            try:
+                self._settings_cfg["ai_panel_collapsed"] = self._ai_collapsed
+                self._save_settings()
+            except (AttributeError, OSError):
+                pass
+
+    def _collapse_ai_panel(self):
+        self._set_ai_collapsed(True)
+
+    def _expand_ai_panel(self):
+        self._set_ai_collapsed(False)
+
+    def _combo(self, master, **kw):
+        """给下拉框套一层圆角外壳，返回 (外壳, 下拉框)。
+
+        clam 主题的 Combobox 是直角的，控件的边框也改不出圆角，所以外面罩一个
+        圆角面板（内缩 3px，正好把直角藏进圆角里），下拉框本身去掉边框融入其中。
+        """
+        shell = widgets.RoundedFrame(master, radius=theme.R_SM, bg=BG_CARD,
+                                     border=BORDER)
+        combo = ttk.Combobox(shell.body, **kw)
+        combo.pack(fill="both", expand=True)
+        return shell, combo
+
+    def _entry(self, master, **kw):
+        """圆角输入框：Entry 放进圆角外壳，返回 (外壳, 输入框)。
+
+        Entry 在 clam 主题下是直角的，也只能在外面罩一层圆角面板；输入框本身
+        去掉边框融进壳里（样式见 _reconfigure_styles 的 TEntry）。
+        """
+        shell = widgets.RoundedFrame(master, radius=theme.R_SM, bg=BG_CARD,
+                                     border=BORDER)
+        field = ttk.Entry(shell.body, **kw)
+        field.pack(fill="both", expand=True, padx=theme.SP_1 + 2, pady=2)
+        return shell, field
+
+    def _button(self, master, text, command=None, variant="soft", **kw):
+        """统一的圆角按钮工厂（ttk.Button 在 clam 主题下画不出圆角）。"""
+        btn = widgets.RoundButton(master, text=text, command=command,
+                                  variant=variant, palette=self._palette(),
+                                  font=_font(theme.FS_BODY), **kw)
+        return btn
+
+    def _repolish_widgets(self):
+        """换主题后让自绘组件（Canvas 系）按新配色重画。
+
+        _recolor_widget_tree 只能改控件的 bg/fg 选项，管不到 Canvas 上的图元，
+        所以这里遍历所有带 apply_palette 的组件补一次。
+        """
+        pal = self._palette()
+
+        def walk(widget):
+            ap = getattr(widget, "apply_palette", None)
+            if callable(ap):
+                try:
+                    ap(pal)
+                except (tk.TclError, AttributeError, TypeError):
+                    pass
+            try:
+                children = widget.winfo_children()
+            except tk.TclError:
+                return
+            for child in children:
+                walk(child)
+
+        roots = [self.root]
+        win = getattr(self, "_settings_window", None)
+        if win is not None:
+            try:
+                if win.winfo_exists():
+                    roots.append(win)
+            except tk.TclError:
+                pass
+        for root in roots:
+            walk(root)
+
+    def _make_brand(self, master, bg_of, subtitle=None):
+        """品牌标识：accent 圆角方块 + 应用名（可带一行副标题）。
+
+        Canvas 图元不受 _recolor_widget_tree 管辖，所以这里把重画函数登记到
+        _canvas_bits，换主题时统一回调。
+        """
+        box = tk.Frame(master, bg=bg_of())
+        # 参考风格的品牌块：更大的圆角方块 + 衬线字，视觉上是一个"印章"
+        canvas = tk.Canvas(box, width=36, height=36, highlightthickness=0,
+                           bg=bg_of(), bd=0)
+        canvas.pack(side="left", padx=(0, theme.SP_3))
+        shape = theme.rounded_rect(canvas, 0, 0, 36, 36, r=11, fill=ACCENT,
+                                   outline=ACCENT)
+        glyph = canvas.create_text(18, 18, text="刷", fill=FG_ON_ACCENT,
+                                   font=_head_font(14, "bold"))
+        text_box = tk.Frame(box, bg=bg_of())
+        text_box.pack(side="left")
+        name = tk.Label(text_box, text="刷题", bg=bg_of(), fg=FG_TEXT,
+                        font=_head_font(theme.FS_TITLE + 1, "bold"))
+        name.pack(anchor="w")
+        sub = None
+        if subtitle:
+            sub = tk.Label(text_box, text=subtitle, bg=bg_of(), fg=FG_MUTED,
+                           font=_font(theme.FS_MICRO))
+            sub.pack(anchor="w", pady=(1, 0))
+
+        def repaint():
+            bg = bg_of()
+            try:
+                canvas.itemconfig(shape, fill=ACCENT, outline=ACCENT)
+                canvas.itemconfig(glyph, fill=FG_ON_ACCENT)
+                canvas.config(bg=bg)
+                box.config(bg=bg)
+                text_box.config(bg=bg)
+                name.config(bg=bg, fg=FG_TEXT)
+                if sub is not None:
+                    sub.config(bg=bg, fg=FG_MUTED)
+            except tk.TclError:
+                pass
+
+        self._canvas_bits.append(repaint)
+        return box
+
+    def _repaint_canvas_bits(self):
+        """重画那些 _recolor_widget_tree 管不到的 Canvas 图元（品牌块、图例色标）。"""
+        for repaint in getattr(self, "_canvas_bits", []):
+            try:
+                repaint()
+            except Exception:
+                pass
+        for badge, color_of in getattr(self, "_legend_badges", []):
+            try:
+                badge.recolor(color_of())
+                badge.config(bg=BG_SUBTLE)
+            except Exception:
+                pass
+
+    def _refresh_option_rows(self):
+        """换主题/换主题色后重画选项行（Canvas 徽标不吃 _recolor_widget_tree）。"""
+        pal = self._palette()
+        for row in getattr(self, "_option_rows", []):
+            try:
+                row.apply_palette(pal)
+            except Exception:
+                pass
 
     def open_settings(self):
         """打开唯一的综合设置窗口；重复点击只唤醒已有窗口。"""
@@ -1725,7 +2104,7 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
         header = tk.Frame(win, bg=BG_CARD, padx=24, pady=16)
         header.pack(fill="x", side="top")
         tk.Label(header, text="设置", bg=BG_CARD, fg=FG_TEXT,
-                 font=_font(16, "bold")).pack(side="left")
+                 font=_head_font(16, "bold")).pack(side="left")
 
         # 内容区：左导航 + 右面板
         content = tk.Frame(win, bg=BG_APP)
@@ -1735,12 +2114,14 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
         content.rowconfigure(0, weight=1)
 
         # 左导航
-        nav = tk.Frame(content, bg=BG_SUBTLE, width=150, highlightthickness=1,
-                       highlightbackground=BORDER)
+        nav = widgets.RoundedFrame(content, radius=theme.R_LG, bg=BG_SIDE,
+                                   border=BORDER_SOFT, width=150,
+                                   shadow=CARD_SHADOW)
         nav.grid(row=0, column=0, sticky="nsw", padx=(0, 12))
         nav.pack_propagate(False)
-        tk.Label(nav, text="设置项", bg=BG_SUBTLE, fg=FG_MUTED,
-                 font=_font(10, "bold")).pack(anchor="w", padx=14, pady=(14, 8))
+        tk.Label(nav.body, text="设置项", bg=BG_SIDE, fg=FG_MUTED,
+                 font=_font(theme.FS_MICRO, "bold")).pack(anchor="w", padx=14,
+                                                          pady=(14, 8))
 
         nav_vars = {}
         sections = [("AI 模型", "模型接口配置"), ("外观", "字体大小 · 界面主题"),
@@ -1748,13 +2129,13 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
         nav_btns = {}
         _show_ref = [None]  # 延迟绑定：show_section 定义后填入
         for i, (title, sub) in enumerate(sections):
-            row = tk.Frame(nav, bg=BG_SUBTLE)
+            row = tk.Frame(nav.body, bg=BG_SIDE)
             row.pack(fill="x", padx=8, pady=2)
             row.columnconfigure(0, weight=1)
-            title_label = tk.Label(row, text=title, bg=BG_SUBTLE, fg=FG_TEXT,
-                                   font=_font(11, "bold"), cursor="hand2")
+            title_label = tk.Label(row, text=title, bg=BG_SIDE, fg=FG_TEXT,
+                                   font=_head_font(12, "bold"), cursor="hand2")
             title_label.grid(row=0, column=0, sticky="w", padx=8, pady=(8, 0))
-            sub_label = tk.Label(row, text=sub, bg=BG_SUBTLE, fg=FG_MUTED,
+            sub_label = tk.Label(row, text=sub, bg=BG_SIDE, fg=FG_MUTED,
                                  font=_font(9), cursor="hand2")
             sub_label.grid(row=1, column=0, sticky="w", padx=8, pady=(0, 8))
             row.configure(cursor="hand2")
@@ -1765,11 +2146,11 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
             nav_btns[title] = row
 
         # 右面板容器
-        panels = tk.Frame(content, bg=BG_CARD, highlightthickness=1,
-                          highlightbackground=BORDER)
+        panels = widgets.RoundedFrame(content, radius=theme.R_LG, bg=BG_CARD,
+                                      border=BORDER, shadow=CARD_SHADOW)
         panels.grid(row=0, column=1, sticky="nsew")
-        panels.columnconfigure(0, weight=1)
-        panels.rowconfigure(0, weight=1)
+        panels.body.columnconfigure(0, weight=1)
+        panels.body.rowconfigure(0, weight=1)
 
         # ---------- AI 模型面板 ----------
         url_entry_var = tk.StringVar()
@@ -1778,7 +2159,7 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
             f.grid(row=0, column=0, sticky="nsew")
             f.columnconfigure(1, weight=1)
             tk.Label(f, text="模型接口", bg=BG_CARD, fg=FG_TEXT,
-                     font=_font(13, "bold")).grid(row=0, column=0, columnspan=2, sticky="w")
+                     font=_head_font(13, "bold")).grid(row=0, column=0, columnspan=2, sticky="w")
             tk.Label(f, text="OpenAI / LM Studio / vLLM 选「OpenAI 兼容」，Ollama 选「Ollama」。",
                      bg=BG_CARD, fg=FG_MUTED, font=_font(9), wraplength=520,
                      justify="left").grid(row=1, column=0, columnspan=2, sticky="w", pady=(4, 12))
@@ -1789,11 +2170,12 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
                     ("timeout", "超时（秒）")]
             for i, (key, title) in enumerate(rows):
                 r = i + 2
+                entry_shell = None
                 tk.Label(f, text=title, bg=BG_CARD, fg=FG_MUTED,
                          font=_font(10)).grid(row=r, column=0, sticky="w", pady=7, padx=(0, 14))
                 if key == "provider":
-                    entry = ttk.Combobox(f, values=["OpenAI 兼容", "Ollama"],
-                                         state="readonly", width=30)
+                    entry_shell, entry = self._combo(f, values=["OpenAI 兼容", "Ollama"],
+                                                     state="readonly", width=30)
                     entry.set(cfg.get("provider", "OpenAI 兼容"))
 
                     def change(event=None, _e=entry, _v=_url_var):
@@ -1804,23 +2186,25 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
                     entry.bind("<<ComboboxSelected>>", change)
                     variables["provider"] = entry
                 elif key == "base_url":
-                    entry = ttk.Entry(f, textvariable=_url_var, width=40)
+                    entry_shell, entry = self._entry(f, textvariable=_url_var, width=40)
                     _url_var.set(cfg.get("base_url", ""))
                     variables["base_url"] = entry
                 elif key == "api_key":
-                    entry = ttk.Entry(f, width=40, show="*")
+                    entry_shell, entry = self._entry(f, width=40, show="*")
                     entry.insert(0, cfg.get("api_key", ""))
                     variables["api_key"] = entry
                 else:
-                    entry = ttk.Entry(f, width=16)
+                    entry_shell, entry = self._entry(f, width=16)
                     entry.insert(0, str(cfg.get(key, "")))
                     variables[key] = entry
-                entry.grid(row=r, column=1, sticky="w")
+                # 下拉框外面套了圆角壳，布局要作用在壳上
+                (entry_shell or entry).grid(row=r, column=1, sticky="w")
             tk.Label(f, text="密钥永久保存在本配置文件中，也可用 OPENAI_API_KEY 环境变量提供（已保存的优先）。",
                      bg=BG_CARD, fg=FG_FAINT, font=_font(9), wraplength=520,
                      justify="left").grid(row=8, column=0, columnspan=2, sticky="w", pady=(14, 0))
-            ttk.Button(f, text="保存模型设置", style="Accent.TButton",
-                       command=lambda: self._save_ai_from_panel(variables)).grid(
+            self._button(f, "保存模型设置",
+                        lambda: self._save_ai_from_panel(variables),
+                        "accent").grid(
                 row=9, column=0, columnspan=2, sticky="e", pady=(18, 0))
             return f
 
@@ -1857,11 +2241,11 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
             f.grid(row=0, column=0, sticky="nsew")
             f.columnconfigure(1, weight=1)
             tk.Label(f, text="外观", bg=BG_CARD, fg=FG_TEXT,
-                     font=_font(13, "bold")).grid(row=0, column=0, columnspan=2, sticky="w")
+                     font=_head_font(13, "bold")).grid(row=0, column=0, columnspan=2, sticky="w")
 
             # 字体大小
             tk.Label(f, text="字体大小", bg=BG_CARD, fg=FG_TEXT,
-                     font=_font(11, "bold")).grid(row=1, column=0, columnspan=2, sticky="w", pady=(16, 4))
+                     font=_head_font(12, "bold")).grid(row=1, column=0, columnspan=2, sticky="w", pady=(16, 4))
             font_frame = tk.Frame(f, bg=BG_CARD)
             font_frame.grid(row=2, column=0, columnspan=2, sticky="ew")
             font_frame.columnconfigure(1, weight=1)
@@ -1880,7 +2264,7 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
 
             # 界面主题
             tk.Label(f, text="界面主题", bg=BG_CARD, fg=FG_TEXT,
-                     font=_font(11, "bold")).grid(row=3, column=0, columnspan=2, sticky="w", pady=(20, 6))
+                     font=_head_font(12, "bold")).grid(row=3, column=0, columnspan=2, sticky="w", pady=(20, 6))
             theme_frame = tk.Frame(f, bg=BG_CARD)
             theme_frame.grid(row=4, column=0, columnspan=2, sticky="ew")
             theme_cards = {}
@@ -1924,38 +2308,48 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
 
             # ---------- 主题色 ----------
             tk.Label(f, text="主题色", bg=BG_CARD, fg=FG_TEXT,
-                     font=_font(11, "bold")).grid(row=6, column=0, columnspan=2, sticky="w", pady=(20, 6))
-            tk.Label(f, text="按钮、选中行、进度条使用此颜色。预设参考 Windows 11 与 VS Code。",
+                     font=_head_font(12, "bold")).grid(row=6, column=0, columnspan=2, sticky="w", pady=(20, 6))
+            tk.Label(f, text="选择强调色，用于按钮、选中项和进度条。点击即生效。",
                      bg=BG_CARD, fg=FG_MUTED, font=_font(9)).grid(
                 row=7, column=0, columnspan=2, sticky="w")
             accent_frame = tk.Frame(f, bg=BG_CARD)
             accent_frame.grid(row=8, column=0, columnspan=2, sticky="ew", pady=(6, 0))
             accent_swatch_btns = {}
+            accent_name = tk.Label(f, bg=BG_CARD, fg=FG_MUTED, font=_font(9))
+            accent_name.grid(row=9, column=0, columnspan=2, sticky="w", pady=(8, 0))
 
             def refresh_accent_swatches():
                 current = self._settings_cfg.get("accent", "midnight")
                 for aid, btn in accent_swatch_btns.items():
-                    if aid == current:
-                        btn.config(highlightbackground=ACCENT, highlightthickness=2)
-                    else:
-                        btn.config(highlightbackground=BORDER, highlightthickness=1)
+                    btn.config(text="✓" if aid == current else "")
+                accent_name.config(text="当前颜色：" + settings_mod.ACCENT_THEMES[current]["label"])
 
             def select_accent(aid):
                 self._settings_cfg["accent"] = aid
                 self._apply_color_theme(self._theme_mode, accent_id=aid)
                 self._save_settings()
                 refresh_accent_swatches()
+                refresh_theme_cards()
 
-            for i, (aid, theme) in enumerate(settings_mod.ACCENT_THEMES.items()):
-                btn = tk.Label(accent_frame, text=theme["label"],
-                               bg=theme["ACCENT"], fg=theme["FG_ON_ACCENT"],
-                               font=_font(9, "bold"), width=7, pady=6,
-                               cursor="hand2", highlightthickness=1,
-                               highlightbackground=BORDER)
-                btn.grid(row=0, column=i, padx=3, sticky="ew")
-                accent_frame.columnconfigure(i, weight=1)
-                for w in (btn,):
-                    w.bind("<Button-1>", lambda e, _a=aid: select_accent(_a))
+            for i, (aid, preset) in enumerate(settings_mod.ACCENT_THEMES.items()):
+                # 固定像素方块，不把中英文颜色名称挤进定宽按钮。
+                slot = tk.Frame(accent_frame, width=40, height=40, bg=BG_CARD)
+                slot.grid(row=0, column=i, padx=(0, 8), pady=2)
+                btn = tk.Label(slot, bg=preset["ACCENT"], fg=preset["FG_ON_ACCENT"],
+                               font=_font(14, "bold"), cursor="hand2", bd=0,
+                               highlightthickness=0, takefocus=True)
+                btn.place(x=0, y=0, relwidth=1, relheight=1)
+                btn._fixed_swatch_colors = True
+                btn._accent_id = aid
+                btn.bind("<Button-1>", lambda e, _a=aid: select_accent(_a))
+                btn.bind("<space>", lambda e, _a=aid: select_accent(_a))
+                btn.bind("<Return>", lambda e, _a=aid: select_accent(_a))
+                btn.bind("<Enter>", lambda e, _a=aid: accent_name.config(
+                    text=settings_mod.ACCENT_THEMES[_a]["label"]))
+                btn.bind("<Leave>", lambda e: refresh_accent_swatches())
+                btn.bind("<FocusIn>", lambda e, _a=aid: accent_name.config(
+                    text=settings_mod.ACCENT_THEMES[_a]["label"]))
+                btn.bind("<FocusOut>", lambda e: refresh_accent_swatches())
                 accent_swatch_btns[aid] = btn
             refresh_accent_swatches()
 
@@ -1963,17 +2357,23 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
             def save_appearance():
                 global FONT_SCALE
                 fs = settings_mod.font_scale_factor(font_var.get())
+                old = FONT_SCALE
                 FONT_SCALE = fs
                 self._settings_cfg["font_scale"] = fs
                 self._save_settings()
-                # 重刷样式
+                # 重刷样式：ttk 样式走 _reconfigure_styles，tk 控件走 _rescale_fonts，
+                # Canvas 图元（选项徽标、矩阵序号）靠重建刷新，确保全界面即时生效
                 self._reconfigure_styles()
+                self._rescale_fonts(old)
+                if getattr(self, "_current_view", "") == "quiz" and self.order:
+                    self._render()
+                if hasattr(self, "list_canvas") and getattr(self, "order", None):
+                    self._rebuild_matrix()
                 win.update_idletasks()
                 self.dialogs.showinfo("已保存", "外观设置已保存，即时生效。")
 
-            ttk.Button(f, text="保存外观设置", style="Accent.TButton",
-                       command=save_appearance).grid(
-                row=9, column=0, columnspan=2, sticky="e", pady=(20, 0))
+            self._button(f, "保存外观设置", save_appearance, "accent").grid(
+                row=10, column=0, columnspan=2, sticky="e", pady=(20, 0))
             return f
 
         # ---------- 答题面板 ----------
@@ -1982,7 +2382,7 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
             f.grid(row=0, column=0, sticky="nsew")
             f.columnconfigure(1, weight=1)
             tk.Label(f, text="答题", bg=BG_CARD, fg=FG_TEXT,
-                     font=_font(13, "bold")).grid(row=0, column=0, columnspan=2, sticky="w")
+                     font=_head_font(13, "bold")).grid(row=0, column=0, columnspan=2, sticky="w")
 
             # 自动跳转延迟
             tk.Label(f, text="答对后自动下一题延迟", bg=BG_CARD, fg=FG_TEXT,
@@ -2007,11 +2407,11 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
             tk.Label(f, text="默认题目顺序", bg=BG_CARD, fg=FG_TEXT,
                      font=_font(11, "bold")).grid(row=3, column=0, columnspan=2, sticky="w", pady=(20, 4))
             order_var = tk.StringVar(value=self._default_order)
-            order_combo = ttk.Combobox(f, textvariable=order_var, state="readonly",
-                                       width=16,
-                                       values=["随机乱序", "原顺序", "题型分组"])
+            order_shell, order_combo = self._combo(
+                f, textvariable=order_var, state="readonly", width=16,
+                values=["随机乱序", "原顺序", "题型分组"])
             order_combo.set(settings_mod.ORDER_LABELS.get(self._default_order, "随机乱序"))
-            order_combo.grid(row=4, column=0, columnspan=2, sticky="w")
+            order_shell.grid(row=4, column=0, columnspan=2, sticky="w")
             tk.Label(f, text="新建一轮答题时的初始顺序，仍可在顶栏随时切换。",
                      bg=BG_CARD, fg=FG_FAINT, font=_font(9)).grid(
                 row=5, column=0, columnspan=2, sticky="w", pady=(8, 0))
@@ -2028,8 +2428,7 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
                 self._save_settings()
                 self.dialogs.showinfo("已保存", "答题设置已保存。")
 
-            ttk.Button(f, text="保存答题设置", style="Accent.TButton",
-                       command=save_quiz).grid(
+            self._button(f, "保存答题设置", save_quiz, "accent").grid(
                 row=6, column=0, columnspan=2, sticky="e", pady=(20, 0))
             return f
 
@@ -2042,15 +2441,16 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
                 child.grid_remove()
             for title, row in nav_btns.items():
                 if title == name:
-                    row.config(bg=ACCENT_SOFT)
+                    # 当前项 = 浮在侧栏上的一张暖白卡片（和侧栏当前项同一套做法）
+                    row.config(bg=BG_CARD)
                     for lbl in row.winfo_children():
-                        lbl.config(bg=ACCENT_SOFT)
+                        lbl.config(bg=BG_CARD)
                 else:
-                    row.config(bg=BG_SUBTLE)
+                    row.config(bg=BG_SIDE)
                     for lbl in row.winfo_children():
-                        lbl.config(bg=BG_SUBTLE)
+                        lbl.config(bg=BG_SIDE)
             if name not in panel_cache:
-                panel_cache[name] = panel_builders[name](panels)
+                panel_cache[name] = panel_builders[name](panels.body)
             panel_cache[name].grid()
 
         _show_ref[0] = show_section  # 延迟绑定：导航按钮点击 → 切换面板
@@ -2058,12 +2458,9 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
         # 快捷入口
         footer = tk.Frame(win, bg=BG_CARD, padx=24, pady=12)
         footer.pack(fill="x", side="bottom")
-        ttk.Button(footer, text="答题快捷键设置", style="Soft.TButton",
-                   command=self.open_shortcut_settings).pack(side="left")
-        tk.Button(footer, text="关闭", bg=BG_CARD, fg=FG_MUTED,
-                  font=_font(10), relief="flat", cursor="hand2",
-                  activebackground=BG_SUBTLE, activeforeground=FG_MUTED,
-                  command=close_settings).pack(side="right")
+        self._button(footer, "答题快捷键设置", self.open_shortcut_settings,
+                     "soft").pack(side="left")
+        self._button(footer, "关闭", close_settings, "ghost").pack(side="right")
 
         # 显示第一节
         show_section("AI 模型")
@@ -2135,8 +2532,10 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
                                    "切换题目顺序将重新开始本轮（已答题目不保留），确定？"):
             # 取消：还原下拉框到当前轮次的顺序
             self._set_order_display(getattr(self, "_round_order", "random"))
+            self._focus_quiz_area()
             return
         self.start_session(self.current_sheet)
+        self._focus_quiz_area()
 
     def _load_sessions_only(self):
         """启动时只加载会话进度（用于导航页显示各卷进度），不进入做题页。"""
@@ -2366,62 +2765,56 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
         q = self.qmap.get(self.order[self.pos]) or self.current_qs[0]
         self.btn_favorite.config(text="★ 已收藏 · 取消" if self.db.is_favorite(q.qid) else "☆ 收藏题目")
         # 题干
-        tag = f"【{q.type}】  {q.difficulty}"
-        if self.mode == "wrong":
-            tag += "  （错题重做）"
         self.question_label.config(text=f"{q.stem}")
         self.root.after_idle(self._fit_q_canvas)
-        self.question_meta.config(text=f"第 {self.pos + 1} / {len(self.order)} 题    {tag}")
-        self.question_meta.grid(row=0, column=0, sticky="w", padx=4, pady=(4, 0))
+        self.question_meta.config(text=f"第 {self.pos + 1} / {len(self.order)} 题")
+        type_text = q.type + (" · 错题重做" if self.mode == "wrong" else "")
+        self.q_type_pill.config(text=type_text)
+        self.q_diff_pill.config(text=q.difficulty or "")
+        self.q_meta_row.grid(row=0, column=0, sticky="w", padx=4, pady=(4, 0))
 
         # 清空旧选项
         for w in self.options_frame.winfo_children():
             w.destroy()
         self._multi_vals = []
+        self._option_rows = []
 
         rec = self.answers.get(q.qid)
         answered = rec is not None
         prev = list(rec["sel"]) if answered else []
 
-        # 单选 / 判断 用单选按钮（判断题只允许选一个）；多选 用复选框
+        # 单选 / 判断 用单选按钮（判断题只允许选一个）；多选 用复选框。
+        # 外观统一交给 OptionRow：圆形字母徽标 + 整行可点。
         var = tk.StringVar()
         self._cur_var = var
         self._multi_vals = []
+        pal = self._palette()
         for opt in q.options:
             letter = opt[0]
-            row = tk.Frame(self.options_frame, bg=BG_CARD, highlightthickness=1,
-                           highlightbackground=BORDER)
-            row.pack(anchor="w", fill="x", pady=6, padx=2)
+            text = widgets.strip_option_prefix(opt)
             if q.type == "多选":
                 v = tk.BooleanVar(value=(letter in prev))
                 self._multi_vals.append((letter, v))
-                cb = tk.Checkbutton(
-                    row, text=opt, variable=v, font=_font(11),
-                    bg=BG_CARD, fg=FG_TEXT, activebackground=BG_SUBTLE,
-                    activeforeground=FG_TEXT, anchor="w",
-                    highlightthickness=0, selectcolor=BG_CARD,
-                    state="disabled" if answered else "normal",
-                )
+                row = widgets.OptionRow(self.options_frame, letter, text, multi=True,
+                                        variable=v, palette=pal, font=_font(theme.FS_BODY))
             else:
-                cb = tk.Radiobutton(
-                    row, text=opt, value=letter, variable=var, font=_font(11),
-                    indicatoron=False, relief="flat", offrelief="flat", borderwidth=0,
-                    command=lambda letter=letter, q=q: self._click_instant(q, letter),
-                    bg=BG_CARD, fg=FG_TEXT, activebackground=BG_SUBTLE,
-                    activeforeground=FG_TEXT, anchor="w",
-                    highlightthickness=0, selectcolor=BG_CARD,
-                    state="disabled" if answered else "normal",
-                )
+                row = widgets.OptionRow(
+                    self.options_frame, letter, text, multi=False,
+                    variable=var, value=letter, palette=pal, font=_font(theme.FS_BODY),
+                    command=lambda letter=letter, q=q: self._click_instant(q, letter))
                 if letter in prev:
                     var.set(letter)
-            cb.pack(side="left", fill="x", expand=True, padx=16, pady=13)
-            if not answered and q.type in ("单选", "判断"):
-                # 点选即判分（多选保留提交按钮）
-                row.bind("<Button-1>", lambda e, letter=letter, q=q: self._click_instant(q, letter))
-                # 悬停高亮整行
-                row.bind("<Enter>", lambda e, r=row: r.config(highlightbackground=ACCENT))
-                row.bind("<Leave>", lambda e, r=row: r.config(highlightbackground=BORDER))
-            self._paint_option(row, cb, letter, q, prev, answered)
+            row.pack(anchor="w", fill="x", pady=theme.SP_1 + 1, padx=2)
+            self._option_rows.append(row)
+            row.set_answered(answered)
+            if answered:
+                # 已作答：正确项淡绿、选错项淡红、其余弱化
+                if letter in q.answer:
+                    row.apply_result("correct")
+                elif letter in prev:
+                    row.apply_result("wrong")
+                else:
+                    row.apply_result("muted")
 
         # 结果条（内联显示对错；答错只提示选项字母，不带选项内容）
         if answered:
@@ -2527,10 +2920,13 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
         cw, ch = self._cell_w, self._cell_h
         for i in range(len(self.order)):
             x0, y0 = (i % cols) * cw, (i // cols) * ch
-            r = self.list_canvas.create_rectangle(x0 + 4, y0 + 4, x0 + cw - 4, y0 + ch - 4,
-                                                   fill=C_UNANSWERED, outline=BORDER_SOFT)
+            # 圆角小方块（原来的直角矩形看着像表格，不像答题卡）
+            r = theme.rounded_rect(self.list_canvas, x0 + 4, y0 + 4,
+                                   x0 + cw - 4, y0 + ch - 4, r=7,
+                                   fill=C_UNANSWERED, outline=BORDER_SOFT)
             t = self.list_canvas.create_text(x0 + cw // 2, y0 + ch // 2, text=str(i + 1),
-                                              font=_font(10), fill=C_TEXT_ON_LIGHT)
+                                              font=_font(10),
+                                              fill=self._cell_text_color(C_UNANSWERED))
             self.list_cells.append((r, t))
             self._cell_colors.append(C_UNANSWERED)
         self._list_rows = (len(self.order) + cols - 1) // cols
@@ -2544,18 +2940,24 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
         else:
             self._paint_matrix()
 
+    @staticmethod
+    def _cell_text_color(fill: str) -> str:
+        """格子序号的颜色按底色亮度选。
+
+        不能按状态枚举：深色主题下主色会被自动提亮，"当前题"其实是个浅色块，
+        再套白字就糊成一片了。
+        """
+        return C_TEXT_ON_CELL if settings_mod.luminance(fill) < 0.55 else C_TEXT_ON_LIGHT
+
     def _paint_matrix(self):
         """按当前状态重着色（仅更新颜色发生变化的格子，答一题只改 2~3 格）"""
-        dark_cells = {C_CURRENT, C_BAD, C_OK}  # 深色格子 → 白字
         for i, (r, t) in enumerate(self.list_cells):
             color = self._matrix_color(self.order[i], i)
             if color == self._cell_colors[i]:
                 continue
             self._cell_colors[i] = color
             self.list_canvas.itemconfig(r, fill=color)
-            self.list_canvas.itemconfig(t,
-                                        fill=C_TEXT_ON_CELL if color in dark_cells
-                                        else C_TEXT_ON_LIGHT)
+            self.list_canvas.itemconfig(t, fill=self._cell_text_color(color))
 
     def _on_matrix_click(self, event):
         """点击矩阵 → 按坐标命中题号并跳转"""
@@ -2576,24 +2978,6 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
         self._cancel_auto_next()
         self._render()
         self._save_session()
-
-    def _paint_option(self, row, cb, letter: str, q: Question,
-                      prev: list[str], answered: bool):
-        """已答题：整行着色——正确选项淡绿，选错的淡红，其余淡灰"""
-        if not answered:
-            return
-        try:
-            if letter in q.answer:
-                row.config(bg=C_OK_SOFT, highlightbackground=C_OK)
-                cb.config(fg=C_OK, disabledforeground=C_OK, bg=C_OK_SOFT)
-            elif letter in prev:
-                row.config(bg=C_BAD_SOFT, highlightbackground=C_BAD)
-                cb.config(fg=C_BAD, disabledforeground=C_BAD, bg=C_BAD_SOFT)
-            else:
-                row.config(bg=BG_CARD, highlightbackground=BORDER)
-                cb.config(fg=FG_FAINT, disabledforeground=FG_MUTED)
-        except tk.TclError:
-            pass
 
     # ---------------- 上一题 / 下一题 ----------------
 
@@ -2733,6 +3117,17 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
             self._restore_session(copy.deepcopy(saved))
         else:
             self.start_session(sheet)
+        self._focus_quiz_area()
+
+    def _focus_quiz_area(self):
+        """把键盘焦点收回做题区——下拉框/文本框点选后焦点会留在它们身上，
+        不收回的话答题快捷键会被输入控件吃掉，表现为“快捷键没反应”。"""
+        if getattr(self, "_current_view", "") != "quiz":
+            return
+        try:
+            self.q_canvas.focus_set()
+        except Exception:
+            pass
 
     # ---------------- 工具 ----------------
 
