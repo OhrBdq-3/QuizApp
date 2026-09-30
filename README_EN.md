@@ -75,7 +75,8 @@ pip install openpyxl
 Activate the environment first (venv: `.venv\Scripts\Activate.ps1`; conda: `conda activate quiz`), then:
 
 ```bash
-python quiz_app.py
+python main.py
+# equivalent: python -m quiz_app
 ```
 
 > **Note:** If you see `No module named 'tkinter'`, your Python is missing the Tk component:
@@ -96,16 +97,47 @@ The first row of your Excel file is the header. Only the **Question** column is 
 | 解析 (Explanation) | No | Answer explanation |
 | 难度 (Difficulty) | No | 简单 / 中等 / 困难 (easy / medium / hard) |
 
-The app automatically recognizes common header variants and option markers (`A.` `A、` `A:` etc.). A sample file, `示例题库.xlsx`, is included for reference.
+The app automatically recognizes common header variants and option markers (`A.` `A、` `A:` etc.). See `samples/示例题库.xlsx` for reference, or regenerate it with `python scripts/make_sample.py`.
+
+## Project Layout
+
+```text
+quiz_app/
+├── main.py          # entry point (python main.py)
+├── quiz_app/        # application package
+│   ├── app.py                  # main window and quiz flow
+│   ├── ai_explanation.py       # AI explanations (OpenAI-compatible / Ollama)
+│   ├── dialogs.py              # dialogs
+│   ├── settings.py             # appearance and answering settings
+│   ├── shortcuts.py            # keyboard shortcuts
+│   ├── memorization_filter.py  # smart filtering rules
+│   └── paths.py                # unified paths (repo root / data / samples)
+├── scripts/         # command-line scripts
+├── tests/           # tests (python tests/test_core.py)
+├── samples/         # sample question bank
+└── data/            # runtime data, not committed
+```
 
 ## Where Is My Data
 
-All data is stored in the app directory, so you can copy it anywhere:
+All runtime data lives in `data/`, so you can copy it anywhere:
 
-- `quiz_bank.db` — question bank and wrong-answer notebook
-- `quiz_session.json` — practice progress
+- `data/quiz_bank.db` — question bank and wrong-answer notebook
+- `data/quiz_session.json` — practice progress
+- `data/*_settings.json` — appearance, shortcuts, and AI endpoint settings
 
-Delete the corresponding file to clear that data. Back them up before upgrading.
+Delete the corresponding file to clear that data. Back up the whole `data/` folder before upgrading.
+
+## Tests
+
+```bash
+python tests/test_core.py        # bank / session / scoring
+python tests/test_import.py      # Excel import parsing
+python tests/test_gui_smoke.py   # GUI smoke test (opens a window for ~2 seconds)
+python -m unittest discover -s tests -p "test_*.py"
+```
+
+Tests write to a temporary directory by default, so your real data in `data/` is never touched.
 
 ## About AI Explanations
 

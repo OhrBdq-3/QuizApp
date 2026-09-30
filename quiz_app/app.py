@@ -35,11 +35,12 @@ Excel 题库格式（每个 sheet 是一张试卷/题库）：
 from __future__ import annotations
 
 import json
-from ai_explanation import AIExplanationMixin
-from shortcuts import ShortcutMixin
-from dialogs import AppDialogs
-from memorization_filter import filter_questions, should_drop, ABSOLUTE_WORDS
-import settings as settings_mod
+from .ai_explanation import AIExplanationMixin
+from .shortcuts import ShortcutMixin
+from .dialogs import AppDialogs
+from .memorization_filter import filter_questions, should_drop, ABSOLUTE_WORDS
+from . import settings as settings_mod
+from .paths import DATA_DIR
 import copy
 import os
 import random
@@ -375,14 +376,12 @@ def load_excel(path: str) -> tuple[dict[str, list[Question]], list[str]]:
 # ---------------------------------------------------------------------------
 
 def _base_dir() -> str:
-    """数据文件目录：与脚本（或打包后的 exe）同目录"""
-    if getattr(sys, "frozen", False):
-        return os.path.dirname(sys.executable)
-    return os.path.dirname(os.path.abspath(__file__))
+    """数据文件目录：仓库根下的 data/（打包后为 exe 同目录的 data/）"""
+    return DATA_DIR
 
 
-DB_FILE = os.path.join(_base_dir(), "quiz_bank.db")
-SESSION_FILE = os.path.join(_base_dir(), "quiz_session.json")
+DB_FILE = os.path.join(DATA_DIR, "quiz_bank.db")
+SESSION_FILE = os.path.join(DATA_DIR, "quiz_session.json")
 
 # ---------- 现代配色（扁平 + 少量阴影感的分层色） ----------
 FONT_FAMILY = "Microsoft YaHei UI"           # Windows 现代无衬线字体
@@ -1837,7 +1836,7 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
                 config["timeout"] = int(config["timeout"])
                 if not 5 <= config["timeout"] <= 600:
                     raise ValueError("超时请设置为 5–600 秒。")
-                from ai_explanation import endpoint
+                from .ai_explanation import endpoint
                 endpoint(config)
             except (ValueError, OSError) as exc:
                 self.dialogs.showerror("无法保存", str(exc), parent=win)

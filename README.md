@@ -75,7 +75,8 @@ pip install openpyxl
 每次运行前记得先激活环境（venv：`.venv\Scripts\Activate.ps1`；conda：`conda activate quiz`），然后：
 
 ```bash
-python quiz_app.py
+python main.py
+# 等价写法：python -m quiz_app
 ```
 
 > **提示：** 如果启动时报 `No module named 'tkinter'`，说明你的 Python 缺少 Tk 组件：
@@ -96,16 +97,49 @@ Excel 第一行为表头，只需一列 **「题目」** 即可导入，其余�
 | 解析 | 否 | 题目解析 |
 | 难度 | 否 | 简单 / 中等 / 困难 |
 
-程序会自动兼容常见表头写法（如「题干」「正确答案」）和多种选项标记（`A.` `A、` `A:` 等）。项目内附带 `示例题库.xlsx`，可直接参考。
+程序会自动兼容常见表头写法（如「题干」「正确答案」）和多种选项标记（`A.` `A、` `A:` 等）。`samples/示例题库.xlsx` 可直接参考，也可用 `python scripts/make_sample.py` 重新生成。
+
+## 项目结构
+
+```text
+quiz_app/
+├── main.py          # 启动入口（python main.py）
+├── quiz_app/        # 应用源码包
+│   ├── app.py              # 主窗口与刷题流程
+│   ├── ai_explanation.py   # AI 解析（OpenAI 兼容 / Ollama）
+│   ├── dialogs.py          # 各类弹窗
+│   ├── settings.py         # 外观与答题设置
+│   ├── shortcuts.py        # 快捷键
+│   ├── memorization_filter.py  # 智能筛题规则
+│   └── paths.py            # 统一路径（仓库根 / data / samples）
+├── scripts/         # 命令行脚本
+│   ├── build_memorization_bank.py  # 生成精简背题库
+│   └── make_sample.py              # 生成示例题库
+├── tests/           # 测试（python tests/test_core.py）
+├── samples/         # 示例题库
+└── data/            # 运行时数据，不入库
+```
 
 ## 数据在哪
 
-所有数据保存在程序目录下，随拷随走：
+所有运行时数据集中在 `data/` 目录，随拷随走：
 
-- `quiz_bank.db` —— 题库与错题本
-- `quiz_session.json` —— 刷题进度
+- `data/quiz_bank.db` —— 题库与错题本
+- `data/quiz_session.json` —— 刷题进度
+- `data/*_settings.json` —— 外观、快捷键、AI 接口等设置
 
-删除对应文件即可清除数据，升级前建议备份。
+删除 `data/` 下对应文件即可清除数据，升级前建议备份整个 `data/` 目录。
+
+## 测试
+
+```bash
+python tests/test_core.py        # 题库 / 会话 / 判分
+python tests/test_import.py      # Excel 导入解析
+python tests/test_gui_smoke.py   # GUI 冒烟（会短暂弹窗约 2 秒）
+python -m unittest discover -s tests -p "test_*.py"
+```
+
+测试默认把题库与会话写到临时目录，不会碰到 `data/` 里的真实数据。
 
 ## 关于 AI 解析
 

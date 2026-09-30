@@ -237,14 +237,18 @@ def run(input_path, output_path, single_rule="unique"):
 
 
 def main():
-    base = Path(__file__).resolve().parent
+    # 本脚本位于 scripts/ 下，产物与素材都以仓库根为基准
+    base = Path(__file__).resolve().parent.parent
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--input", type=Path, help="原始 xlsx，默认寻找人工智能训练师.xlsx")
     parser.add_argument("--output", type=Path, default=base / "outputs" / "memorization" / "人工智能训练师-完整背题库.xlsx")
     parser.add_argument("--single-rule", choices=["unique", "original", "keep"], default="unique")
     args = parser.parse_args()
     if args.input is None:
-        candidates = [base / "人工智能训练师.xlsx", base.parent / "人工智能训练师.xlsx"]
+        candidates = [
+            base / "人工智能训练师.xlsx",
+            base / "samples" / "人工智能训练师.xlsx",
+        ]
         args.input = next((p for p in candidates if p.is_file()), None)
         if args.input is None:
             parser.error("没有找到原始题库，请用 --input 指定路径")
