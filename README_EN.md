@@ -1,44 +1,87 @@
-# Offline Quiz App
+<div align="center">
+  <sub><a href="README.md">中文</a> ｜ English</sub>
+</div>
 
-**English** | [中文](README.md)
+<div align="center">
 
-A simple, local-first quiz app: import your Excel question bank and start practicing right away.
+<img src="docs/banner.svg" width="780" alt="Quiz App — a local offline quiz tool that reads Excel question banks"/>
 
-No internet connection, no sign-up — all data stays on your own computer.
+![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-5d3a54)
+![Dependencies](https://img.shields.io/badge/dependencies-1%20(openpyxl)-8a7968)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-8a7968)
+![Offline](https://img.shields.io/badge/offline-100%25-7a9a76)
 
-## What It Does
+**Import an Excel question bank and start practicing.**
 
-- **Import & go** — supports `.xlsx` question banks; each Sheet becomes a separate test paper, imported once and saved permanently
-- **Three question types** — single-choice, multiple-choice, and true/false, with instant scoring and explanations
-- **Flexible ordering** — random shuffle / original order / grouped by type, switchable anytime
-- **Wrong-answer notebook** — questions you get wrong are collected automatically and removed once answered correctly
-- **Auto-saved progress** — close the app and reopen it; you'll continue right where you left off
-- **Smart filtering** — filters out questions that only require memorizing keywords, generating a condensed review bank
-- **Keyboard-first** — pick answers with letter keys, move between questions with arrow keys, no mouse needed
-- **AI explanations (optional)** — connect to OpenAI-compatible APIs, Ollama, LM Studio, and more to generate key points and common pitfalls with one click
+No internet, no sign-up. Your question bank, progress, and wrong answers stay on your own computer.
 
-## Installation
+</div>
 
-Requires **Python 3.9 or newer** (3.11 recommended). The UI is built with the bundled Tkinter — no extra GUI framework needed.
+---
 
-Using a virtual environment is recommended to avoid polluting your system Python. Pick either option below.
+## UI
 
-### Option 1: venv (recommended)
+<div align="center">
+
+<img src="docs/screenshots/quiz.png" width="720" alt="Quiz view"/><br/>
+
+<br/><br/>
+
+<table>
+  <tr>
+    <td width="50%" align="center"><img src="docs/screenshots/bank.png" alt="Question bank"/><br/></td>
+    <td width="50%" align="center"><img src="docs/screenshots/answered.png" alt="Answer feedback"/><br/></td>
+  </tr>
+</table>
+
+</div>
+
+## Introduction
+
+An offline quiz tool: your question bank never leaves your machine, with no question-count limit and optional self-configured AI explanations.
+
+## Features
+
+| | |
+| --- | --- |
+| **Import** | Accepts `.xlsx`; every Sheet becomes its own test paper, stored locally |
+| **Single · Multiple · True/False** | Scored on submit, with explanations shown alongside the answer |
+| **Wrong-answer notebook** | Mistakes go in automatically; they leave once you redo them correctly |
+| **Auto-saved progress** | Close the app, reopen it, pick up at the same question |
+| **Keyboard** | Letter keys to answer, arrow keys to move between questions |
+| **Smart filtering** | Filters out questions answerable by keyword alone, builds a condensed review bank |
+| **Themes** | Light and dark mode, adjustable font size |
+| **AI explanations (optional)** | Can connect to OpenAI-compatible APIs, Ollama, or LM Studio to generate explanations for the current question |
+
+## Quick Start
+
+**1. Install the dependency.** The whole project has exactly one third-party package; requires Python 3.9+ (3.11 recommended):
+
+```bash
+pip install openpyxl
+```
+
+**2. Launch the app.** The UI is built on Python's bundled Tkinter — no extra GUI framework needed:
+
+```bash
+python main.py
+# equivalent: python -m quiz_app
+```
+
+**3. Import a question bank.** Click "Import", pick an Excel file, and start drilling.
+
+<details>
+<summary><b>Being tidy: use a virtual environment</b></summary>
+<br>
 
 Windows (PowerShell):
 
 ```powershell
-# 1. Go to the project directory
 cd D:\path\to\quiz_app
-
-# 2. Create a virtual environment
 python -m venv .venv
-
-# 3. Activate it
 .venv\Scripts\Activate.ps1
 # If script execution is blocked, use instead: .venv\Scripts\activate.bat
-
-# 4. Install dependencies
 pip install -r requirements.txt
 ```
 
@@ -51,43 +94,34 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Option 2: Conda
+Conda works too:
 
 ```bash
-# 1. Create and activate an environment
 conda create -n quiz python=3.11
 conda activate quiz
-
-# 2. Install dependencies
 cd /path/to/quiz_app
 pip install -r requirements.txt
 ```
 
-### Minimal install
+Activate the environment before each run.
 
-If you'd rather skip virtual environments, installing the single third-party dependency is enough:
+</details>
 
-```bash
-pip install openpyxl
-```
+<details>
+<summary><b>Getting "No module named 'tkinter'"?</b></summary>
+<br>
 
-## Running
+Your Python is missing the Tk component:
 
-Activate the environment first (venv: `.venv\Scripts\Activate.ps1`; conda: `conda activate quiz`), then:
+- **Windows**: re-run the official installer and check **tcl/tk and IDLE**
+- **Ubuntu / Debian**: `sudo apt install python3-tk`
+- **macOS**: prefer the python.org installer (the Homebrew build may lack Tk)
 
-```bash
-python main.py
-# equivalent: python -m quiz_app
-```
-
-> **Note:** If you see `No module named 'tkinter'`, your Python is missing the Tk component:
-> - Windows: re-run the official installer and check **"tcl/tk and IDLE"**
-> - Ubuntu/Debian: `sudo apt install python3-tk`
-> - macOS: prefer the python.org installer (the Homebrew build may lack Tk)
+</details>
 
 ## Question Bank Format
 
-The first row of your Excel file is the header. Only the **Question** column is required; everything else is optional:
+The first row is the header. Only the **Question** column is required; everything else is optional:
 
 | Column | Required | Description |
 | --- | --- | --- |
@@ -98,7 +132,7 @@ The first row of your Excel file is the header. Only the **Question** column is 
 | 解析 (Explanation) | No | Answer explanation |
 | 难度 (Difficulty) | No | 简单 / 中等 / 困难 (easy / medium / hard) |
 
-The app automatically recognizes common header variants and option markers (`A.` `A、` `A:` etc.). See `samples/示例题库.xlsx` for reference, or regenerate it with `python scripts/make_sample.py`.
+The app is forgiving about headers: common variants like 题干 or 正确答案 are recognized, and option markers like `A.` `A、` `A:` all work. `samples/示例题库.xlsx` is a ready-made sample, or regenerate it with `python scripts/make_sample.py`.
 
 ## Keyboard Shortcuts
 
@@ -109,20 +143,22 @@ The app automatically recognizes common header variants and option markers (`A.`
 | `←` `↑` | Previous question |
 | `→` `↓` | Next question |
 
-Answer keys can be rebound to any letter, digit, `Enter`, or `Space` under *Settings · Shortcuts*. Arrow-key paging is fixed and not configurable.
+Answer keys can be rebound to any letter, digit, `Enter`, or `Space` under *Settings · Shortcuts*; arrow-key paging is fixed. Arrows still page after you've answered, so you can go back and review — and when focus is inside the explanation panel, arrows keep their native scrolling instead of paging.
 
-Arrow keys still page after you've answered a question, so you can go back and review. When focus is inside the explanation panel, arrows keep their native scrolling behavior instead of paging.
+With a Chinese IME active, letter keys get swallowed by the input method. The app works around this automatically; if it still fails on your machine, switch to English input.
 
-> With a Chinese IME active, letter keys get swallowed by the input method. The app works around this automatically; if it still fails in some environments, switch to English input.
+## AI Explanations (Optional)
 
-## About AI Explanations
+Nothing changes if you never configure it.
 
-AI features are entirely optional — everything works without configuration. Only when you click "AI Explanation" will the current question be sent to the model service you configured.
+When you want it, fill in your own model service under *Settings*: OpenAI, LM Studio, and vLLM use the "OpenAI-compatible" protocol; Ollama uses "Ollama". Only when you click "AI Explanation" does the current question leave your machine; the API key is stored in the local config file, or supplied via the `OPENAI_API_KEY` environment variable.
 
 ## Terms of Use
 
-This project is intended for personal study and question-bank review. Do not use it in exams, competitions, or formal assessments where external tools or AI assistance are prohibited. Question content and AI-generated explanations may contain errors — always verify them yourself.
+For personal study and question-bank review. Don't use it in exams, competitions, or formal assessments where external tools or AI assistance are prohibited — that line is yours to hold. Question content and AI explanations can be wrong; verify what matters.
 
 ## License
 
-Released under the [MIT License](LICENSE) — free to use, modify, and distribute.
+[MIT](LICENSE) — free to use, modify, and distribute.
+
+---

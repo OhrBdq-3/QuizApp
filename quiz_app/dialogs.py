@@ -8,9 +8,14 @@ class AppDialogs:
         self.root = root
         self.font_family = font_family
         self.palette_provider = None
+        self.titlebar_hook = None
 
     def set_palette_provider(self, provider):
         self.palette_provider = provider
+
+    def set_titlebar_hook(self, hook):
+        """注册标题栏染色回调：hook(window)，由宿主按当前明暗主题实现。"""
+        self.titlebar_hook = hook
 
     def showinfo(self, title, message, **kwargs):
         self._show(title, message, kind="info", parent=kwargs.get("parent"))
@@ -90,6 +95,11 @@ class AppDialogs:
         y = parent_y + (parent_h - height) // 2
         window.geometry(f"{width}x{height}+{x}+{y}")
         window.deiconify()
+        if self.titlebar_hook:
+            try:
+                self.titlebar_hook(window)
+            except Exception:
+                pass
         window.lift()
         window.grab_set()
         window.focus_force()

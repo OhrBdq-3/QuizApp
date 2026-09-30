@@ -1,44 +1,87 @@
-# 离线刷题 App
+<div align="center">
+  <sub>中文 ｜ <a href="README_EN.md">English</a></sub>
+</div>
 
-**中文** | [English](README_EN.md)
+<div align="center">
 
-一个简单好用的本地刷题工具：导入 Excel 题库，马上开始刷题。
+<img src="docs/banner.svg" width="780" alt="刷题 —— 本地离线刷题工具，从 Excel 题库开始"/>
 
-不需要联网、不需要注册，所有数据都保存在你自己的电脑上。
+![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-5d3a54)
+![Dependencies](https://img.shields.io/badge/dependencies-1%20(openpyxl)-8a7968)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-8a7968)
+![Offline](https://img.shields.io/badge/offline-100%25-7a9a76)
 
-## 它能做什么
+**导入 Excel 题库，即可开始刷题。**
 
-- **导入即刷题** —— 支持 `.xlsx` 题库，每个 Sheet 自动变成一张试卷，导入一次永久保存
-- **三种题型** —— 单选题、多选题、判断题，答完立即判分并显示解析
-- **灵活刷题** —— 随机乱序 / 原始顺序 / 按题型分组，随时切换
-- **错题本** —— 答错的题自动收录，重做答对后自动移出
-- **进度自动保存** —— 关掉程序再打开，从上次做到的地方继续
-- **智能筛题** —— 按常见出题规律筛掉"背关键词就行"的题目，生成精简背题库
-- **键盘刷题** —— 字母键选答案，方向键翻页，全程不用碰鼠标
-- **AI 解析（可选）** —— 接入 OpenAI 兼容接口、Ollama、LM Studio 等模型服务，一键生成考点分析和易错点提示
+不联网、不注册。题库、进度、错题都保存在本地电脑上。
 
-## 安装
+</div>
 
-需要 **Python 3.9 或更高版本**（推荐 3.11）。界面使用 Python 自带的 Tkinter，无需额外安装 GUI 框架。
+---
 
-建议用虚拟环境安装依赖，避免污染系统 Python。下面两种方式选一种即可。
+## UI
 
-### 方式一：venv
+<div align="center">
+
+<img src="docs/screenshots/quiz.png" width="720" alt="做题界面"/><br/>
+
+<br/><br/>
+
+<table>
+  <tr>
+    <td width="50%" align="center"><img src="docs/screenshots/bank.png" alt="题库页"/><br/></td>
+    <td width="50%" align="center"><img src="docs/screenshots/answered.png" alt="判分反馈"/><br/></td>
+  </tr>
+</table>
+
+</div>
+
+## 简介
+
+离线刷题工具，私人题库不出本机，无题目数量限制，支持自配AI解析。
+
+## 主要功能
+
+| | |
+| --- | --- |
+| **导入题库** | 支持 `.xlsx`，每个 Sheet 自动变成一张试卷，题库保存在本地 |
+| **单选 · 多选 · 判断** | 提交后立即判分，解析与答案一起显示 |
+| **错题本** | 答错的题自动收录，重做答对后自动移出 |
+| **进度自动保存** | 关闭程序后再次打开，从上次停下的题目继续 |
+| **键盘操作** | 可用字母键选答案、方向键翻页 |
+| **智能筛题** | 按常见出题规律筛掉只凭关键词就能答对的题，生成一份精简背题库 |
+| **界面主题** | 浅色 / 深色两种主题，字号可调 |
+| **AI 解析（可选）** | 可接入 OpenAI 兼容接口、Ollama、LM Studio，为当前题目生成解析 |
+
+## 快速开始
+
+**1. 安装依赖。** 整个项目只有一个第三方包，需要 Python 3.9+（推荐 3.11）：
+
+```bash
+pip install openpyxl
+```
+
+**2. 启动程序。** 界面用的是 Python 自带的 Tkinter，不用额外装 GUI 框架：
+
+```bash
+python main.py
+# 等价写法：python -m quiz_app
+```
+
+**3. 导入题库。** 点「导入题库」，选一份 Excel，开始刷。
+
+<details>
+<summary><b>讲究一点：先建虚拟环境</b></summary>
+<br>
 
 Windows（PowerShell）：
 
 ```powershell
-# 1. 进入项目目录
-cd D:\人工智能平台工作\工具\quiz_app
-
-# 2. 创建虚拟环境
+cd D:\path\to\quiz_app
 python -m venv .venv
-
-# 3. 激活虚拟环境
 .venv\Scripts\Activate.ps1
 # 若提示禁止运行脚本，改用：.venv\Scripts\activate.bat
-
-# 4. 安装依赖
 pip install -r requirements.txt
 ```
 
@@ -51,43 +94,34 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 方式二：Conda
+用 Conda 也行：
 
 ```bash
-# 1. 创建并激活环境
 conda create -n quiz python=3.11
 conda activate quiz
-
-# 2. 进入项目目录后安装依赖
 cd /path/to/quiz_app
 pip install -r requirements.txt
 ```
 
-### 只装一个依赖也可以
+每次运行前记得先激活环境。
 
-如果不想用虚拟环境，直接装唯一的第三方依赖也行：
+</details>
 
-```bash
-pip install openpyxl
-```
+<details>
+<summary><b>启动时报 No module named 'tkinter'？</b></summary>
+<br>
 
-## 启动
+说明你的 Python 缺少 Tk 组件：
 
-每次运行前记得先激活环境（venv：`.venv\Scripts\Activate.ps1`；conda：`conda activate quiz`），然后：
+- **Windows**：重新运行官方安装程序，勾选 **tcl/tk and IDLE**
+- **Ubuntu / Debian**：`sudo apt install python3-tk`
+- **macOS**：建议用 python.org 官方安装包（Homebrew 版可能缺 Tk）
 
-```bash
-python main.py
-# 等价写法：python -m quiz_app
-```
-
-> **提示：** 如果启动时报 `No module named 'tkinter'`，说明你的 Python 缺少 Tk 组件：
-> - Windows：重新运行官方安装程序，勾选 **"tcl/tk and IDLE"**
-> - Ubuntu/Debian：`sudo apt install python3-tk`
-> - macOS：建议使用 python.org 官方安装包（Homebrew 版可能缺失）
+</details>
 
 ## 题库格式
 
-Excel 第一行为表头，只需一列 **「题目」** 即可导入，其余列都是可选的：
+第一行是表头，只有「题目」一列必填，其他列随手加：
 
 | 列名 | 必填 | 说明 |
 | --- | --- | --- |
@@ -98,8 +132,7 @@ Excel 第一行为表头，只需一列 **「题目」** 即可导入，其余�
 | 解析 | 否 | 题目解析 |
 | 难度 | 否 | 简单 / 中等 / 困难 |
 
-程序会自动兼容常见表头写法（如「题干」「正确答案」）和多种选项标记（`A.` `A、` `A:` 等）。`samples/示例题库.xlsx` 可直接参考，也可用 `python scripts/make_sample.py` 重新生成。
-
+程序对表头写法挺宽容：「题干」「正确答案」这类常见写法都能认，选项标记 `A.` `A、` `A:` 也都行。`samples/示例题库.xlsx` 是一份现成的样例，也可以用 `python scripts/make_sample.py` 重新生成。
 
 ## 快捷键
 
@@ -110,20 +143,22 @@ Excel 第一行为表头，只需一列 **「题目」** 即可导入，其余�
 | `←` `↑` | 上一题 |
 | `→` `↓` | 下一题 |
 
-答题键可以在「设置 · 答题快捷键」里改成任意字母、数字、`Enter` 或 `Space`；方向键翻页是固定绑定，不参与自定义。
+答题键能在「设置 · 答题快捷键」里改成任意字母、数字、`Enter` 或 `Space`；方向键翻页是固定绑定。答完题照样能用方向键翻页回看——焦点在解析面板里时，方向键保留滚动，不会误翻页。
 
-答完题也能用方向键翻页回看；焦点在阅读解析面板时方向键保留原生滚动，不会误翻页。
+中文输入法开着时，字母键会被输入法截走。程序已自动规避，个别环境若仍不生效，切到英文输入即可。
 
-> 中文输入法处于中文状态时字母键会被输入法截走，程序已自动规避。若个别环境仍不生效，切换到英文输入即可。
+## AI 解析（可选）
 
-## 关于 AI 解析
+不配置完全不影响刷题。
 
-AI 功能完全可选，不配置不影响刷题。只有主动点击「AI 解析」时，才会把当前题目发送给你自己配置的模型服务。
+想用的时候，在「设置」里填一个你自己的模型服务：OpenAI、LM Studio、vLLM 选「OpenAI 兼容」，Ollama 选「Ollama」。只有你主动点「AI 解析」，当前这道题才会发出去；密钥只存在本机配置文件里，也可以走 `OPENAI_API_KEY` 环境变量。
 
 ## 使用须知
 
-本项目用于个人学习和题库复习。请勿在禁止使用外部工具或 AI 辅助的考试、竞赛及正式考核中使用，使用者应自行遵守相关规则。题库内容和 AI 解析可能存在错误，请自行核实。
+个人学习和题库复习用。别在禁止使用外部工具或 AI 辅助的考试、竞赛、正式考核里用它——这条底线得自己守住。题库内容和 AI 解析都可能有错，拿不准的，自己再核一遍。
 
 ## 开源协议
 
-本项目基于 [MIT License](LICENSE) 发布，可自由使用、修改和分发。
+[MIT](LICENSE) —— 可自由使用、修改和分发。
+
+---

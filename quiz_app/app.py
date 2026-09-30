@@ -39,6 +39,7 @@ from .ai_explanation import AIExplanationMixin
 from .shortcuts import ShortcutMixin
 from .dialogs import AppDialogs
 from . import theme
+from . import titlebar
 from . import widgets
 from .memorization_filter import filter_questions, should_drop, ABSOLUTE_WORDS
 from . import settings as settings_mod
@@ -711,6 +712,12 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
             "BG_CARD": BG_CARD, "FG_TEXT": FG_TEXT,
             "FG_MUTED": FG_MUTED, "ACCENT": ACCENT,
         })
+        # 对话框的标题栏也按当前明暗主题刷（回调时读实例状态，拿到的是当下值）
+        self.dialogs.set_titlebar_hook(
+            lambda win: titlebar.paint(
+                win,
+                self._resolved_theme
+                or settings_mod.resolve_theme(self._theme_mode)))
         self._build_ui()
         self._install_shortcut_bindings()
         self._init_ai(os.path.join(_base_dir(), "ai_settings.json"))
@@ -720,7 +727,19 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
         # 重新渲染导航页，让各卷卡片反映刚加载的题库与进度
         self._render_bank()
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+        # 兜底：Tk 的顶层窗口是延迟创建的。构造期间 _init_settings 里第一次
+        # 刷标题栏时 GetParent(winfo_id) 还拿不到真正的 TkTopLevel，属性会写在
+        # 临时窗口上；等 Tk 真建窗时又用系统默认值初始化，把属性冲掉——表现为
+        # "启动时标题栏没颜色，要手动切一次主题才对"。所以窗口首帧映射后再刷。
+        self.root.bind("<Map>", self._on_root_mapped, add="+")
         self._theme_watch_id = self.root.after(2000, self._watch_system_theme)
+
+    def _on_root_mapped(self, _event=None):
+        """主窗首次真正映射到屏幕后补刷标题栏（见 __init__ 末尾的说明）。"""
+        if getattr(self, "_titlebar_mapped_done", False):
+            return
+        self._titlebar_mapped_done = True
+        self._sync_titlebars()
 
     # ---------------- UI 构建 ----------------
 
@@ -735,25 +754,31 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
         # 否则两处各写一遍，改了这边忘了那边就会出现深浅色不一致。
         self._reconfigure_styles()
 
-        # 顶栏：一条圆角横向 bar（品牌 + 全局控件），与下方卡片同宽对齐
-        top = widgets.RoundedFrame(self.root, radius=theme.R_LG, bg=BG_CARD,
+        # 顶栏：一条圆角横向 bar（品牌 + 全局控件），与下方卡片同宽对齐。
+        # 底色用 ACCENT_SOFT（主题色浅底）：跟随主题色与明暗切换。
+        # 注意：圆角块是 Canvas 图元，不吃 _recolor_widget_tree 的 bg 重映射，
+        # 所以换主题时靠下面注册的 _repaint_header() 显式重设一次填充色。
+        top = widgets.RoundedFrame(self.root, radius=theme.R_LG, bg=ACCENT_SOFT,
                                    border=BORDER, shadow=CARD_SHADOW)
         self.quiz_header = top
         # 左侧品牌区：accent 圆角方块 + 应用名
         self._canvas_bits = []
-        self._make_brand(top.body, lambda: BG_CARD, subtitle="本地离线 · 导入即练").pack(
+        self._make_brand(top.body, lambda: ACCENT_SOFT, subtitle="本地离线 · 导入即练").pack(
             side="left", padx=(theme.SP_4, theme.SP_6), pady=theme.SP_3)
 
         # 右侧控件区：顺序 → 试卷 → 导入
-        ctl = tk.Frame(top.body, bg=BG_CARD)
+        ctl = tk.Frame(top.body, bg=ACCENT_SOFT)
         ctl.pack(side="right", padx=(0, theme.SP_4), pady=theme.SP_3)
-        tk.Label(ctl, text="顺序", bg=BG_CARD, fg=FG_MUTED,
-                 font=_font(theme.FS_META)).pack(side="left", padx=(0, theme.SP_2))
+        header_label = tk.Label(ctl, text="顺序", bg=ACCENT_SOFT, fg=FG_MUTED,
+                                font=_font(theme.FS_META))
+        header_label.pack(side="left", padx=(0, theme.SP_2))
         self.order_var = tk.StringVar(value="随机乱序")
         order_shell, self.order_combo = self._combo(
             ctl, textvariable=self.order_var, state="disabled", width=9,
             values=["随机乱序", "原顺序", "题型分组"])
         order_shell.pack(side="left", padx=(0, theme.SP_4))
+        # 下拉框外壳融入顶栏底色（壳内输入框仍为卡片色，保留层次）
+        order_shell.set_colors(bg=ACCENT_SOFT, border=BORDER)
         self.order_combo.bind("<<ComboboxSelected>>", self._on_order_change)
 
         # 试卷选择
@@ -761,7 +786,11 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
         sheet_shell, self.sheet_combo = self._combo(
             ctl, textvariable=self.sheet_var, state="disabled", width=22)
         sheet_shell.pack(side="left", padx=(0, theme.SP_3))
+        sheet_shell.set_colors(bg=ACCENT_SOFT, border=BORDER)
         self.sheet_combo.bind("<<ComboboxSelected>>", self._on_sheet_change)
+        self._header_accent_widgets = (top, ctl, header_label, order_shell,
+                                       sheet_shell)
+        self._canvas_bits.append(self._repaint_header)
         self._button(ctl, "导入题库", self.on_import, "accent").pack(side="left")
 
         # ============ 两个顶层视图：导航页（我的题库）/ 做题页 ============
@@ -1051,10 +1080,12 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
         # 鼠标停在卡片上时 wheel 事件被内层 widget 吃掉，
         # 所以渲染后再用 _bind_bank_wheel 把 wheel 绑到 bank_body 及其所有后代
         self.bank_canvas = bank_canvas
-        bank_canvas.bind("<MouseWheel>",
-                         lambda e: bank_canvas.yview_scroll(-1 * int(e.delta / 120), "units"))
-        bank_canvas.bind("<Button-4>", lambda e: bank_canvas.yview_scroll(-1, "units"))
-        bank_canvas.bind("<Button-5>", lambda e: bank_canvas.yview_scroll(1, "units"))
+        # 滚轮：统一走 _bank_wheel（高精度 delta 聚合 + Linux Button-4/5）。
+        # 卡片在 bank_body（canvas 内嵌窗口）里，鼠标停在卡片上时 wheel 事件被
+        # 内层 widget 吃掉，所以渲染后再用 _bind_bank_wheel 绑到 bank_body 后代。
+        bank_canvas.bind("<MouseWheel>", self._bank_wheel)
+        bank_canvas.bind("<Button-4>", self._bank_wheel)
+        bank_canvas.bind("<Button-5>", self._bank_wheel)
         # 点击空白处让内层卡片可点击
         bank_canvas.bind("<Button-1>", lambda e: self._bank_click_through(e))
         self.bank_body.bind("<Button-1>", lambda e: self._bank_click_through(e))
@@ -1092,18 +1123,28 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
         """让 canvas 内层卡片上的点击正常传递给卡片按钮（不触发滚动）"""
         return
 
+    def _bank_wheel(self, e):
+        """题库列表滚轮：高精度 delta 聚合，兼容 Linux Button-4/5。"""
+        canvas = self.bank_canvas
+        number = getattr(e, "num", None)
+        if number in (4, 5):
+            units = -3 if number == 4 else 3
+        else:
+            remainder = getattr(canvas, "_wheel_delta", 0) + e.delta
+            ticks = int(remainder / 120)
+            canvas._wheel_delta = remainder - ticks * 120
+            units = -ticks * 3
+        if units:
+            canvas.yview_scroll(units, "units")
+        return "break"
+
     def _bind_bank_wheel(self, widget):
         """把滚轮/中键滚动手势绑到 widget 及其所有后代，统一滚动 bank_canvas。
         卡片是 canvas 内嵌窗口(bank_body)的子控件，wheel 事件会落在它们身上
         而不是 canvas 上，所以必须把 wheel 绑到内层每个控件。"""
-        canvas = self.bank_canvas
-        def _scroll(e):
-            # 鼠标在卡片上时向上/向下滚动整个题库列表
-            canvas.yview_scroll(-1 * int(e.delta / 120), "units")
-            return "break"   # 防止内层控件再处理
-        widget.bind("<MouseWheel>", _scroll)
-        widget.bind("<Button-4>", lambda e: (canvas.yview_scroll(-3, "units"), "break")[1])
-        widget.bind("<Button-5>", lambda e: (canvas.yview_scroll(3, "units"), "break")[1])
+        widget.bind("<MouseWheel>", self._bank_wheel)
+        widget.bind("<Button-4>", self._bank_wheel)
+        widget.bind("<Button-5>", self._bank_wheel)
         for child in widget.winfo_children():
             self._bind_bank_wheel(child)
 
@@ -1385,6 +1426,9 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
             self.bank_canvas.itemconfig(self._bank_win, width=cw)
         # 确保 scrollregion 覆盖全部卡片
         self.bank_canvas.config(scrollregion=self.bank_canvas.bbox("all"))
+        # 列表重建后回到顶部：否则从做题页切回导航页时，滚动条会停留在上次的
+        # 位置（常在底部），看起来像「滚动条一直呆在最下面」。
+        self.bank_canvas.yview_moveto(0)
 
     def _open_sheet(self, sheet: str):
         """从导航页打开某套试卷（有进度则续接，否则重新开始）"""
@@ -1656,6 +1700,10 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
         self._theme_mode = mode
         self._resolved_theme = resolved
         self._reconfigure_styles()
+        # 窗口标题栏（带最小化/关闭按钮那条）归 DWM 管，Tk 画不到，
+        # 走单独通道染色——启动（refresh_widgets=False）和每次换主题都要刷。
+        if hasattr(self, "_sync_titlebars"):
+            self._sync_titlebars()
         if refresh_widgets and hasattr(self, "root"):
             background_names = ("BG_APP", "BG_CARD", "BG_SUBTLE", "BG_SIDE",
                                 "SHADOW", "BORDER", "BORDER_SOFT",
@@ -1893,6 +1941,33 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
 
     # ---------------- 配色快照 ----------------
 
+    def _sync_titlebars(self):
+        """把所有顶层窗口的标题栏刷成当前明暗配色。
+
+        标题栏（带最小化/最大化/关闭那条）是 Windows DWM 画的，Tk 管不到；
+        见 titlebar.py。配色只分浅色/深色、与应用底 BG_APP 同色系，**不跟
+        主题色**——换主题色时标题栏保持稳定，只在切明暗时变化。
+        主窗、设置窗、应用样式对话框全部覆盖。
+        """
+        if not getattr(self, "root", None):
+            return
+        mode = self._resolved_theme or settings_mod.resolve_theme(self._theme_mode)
+        if mode not in titlebar.THEME_COLORS:
+            mode = "light"
+        wins = [self.root]
+        win = getattr(self, "_settings_window", None)
+        if win is not None:
+            try:
+                if win.winfo_exists():
+                    wins.append(win)
+            except tk.TclError:
+                pass
+        for w in wins:
+            try:
+                titlebar.paint(w, mode)
+            except Exception:
+                pass
+
     def _palette(self) -> dict:
         """当前主题的一套颜色快照，交给组件自己绘制（切换主题时重画即可）。"""
         return {
@@ -2053,6 +2128,27 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
         self._canvas_bits.append(repaint)
         return box
 
+    def _repaint_header(self):
+        """顶栏整条按当前主题色重刷。
+
+        RoundedFrame 的圆角底是 Canvas 图元，_recolor_widget_tree 只改控件的
+        bg/fg，改不动图元填充色——所以这里显式把顶栏底色（含内层 Frame/Label
+        和两个下拉框外壳）重设成新的 ACCENT_SOFT。少这一句，换主题色时顶栏就
+        会一直停在启动时的那套颜色上。
+        """
+        try:
+            widgets_ = getattr(self, "_header_accent_widgets", None)
+            if not widgets_:
+                return
+            header, ctl, label, order_shell, sheet_shell = widgets_
+            header.set_colors(bg=ACCENT_SOFT, border=BORDER)
+            ctl.configure(bg=ACCENT_SOFT)
+            label.configure(bg=ACCENT_SOFT, fg=FG_MUTED)
+            for shell in (order_shell, sheet_shell):
+                shell.set_colors(bg=ACCENT_SOFT, border=BORDER)
+        except (tk.TclError, ValueError):
+            pass
+
     def _repaint_canvas_bits(self):
         """重画那些 _recolor_widget_tree 管不到的 Canvas 图元（品牌块、图例色标）。"""
         for repaint in getattr(self, "_canvas_bits", []):
@@ -2099,6 +2195,7 @@ class QuizApp(AIExplanationMixin, ShortcutMixin):
             win.destroy()
 
         win.protocol("WM_DELETE_WINDOW", close_settings)
+        self._sync_titlebars()
 
         # 顶部标题
         header = tk.Frame(win, bg=BG_CARD, padx=24, pady=16)

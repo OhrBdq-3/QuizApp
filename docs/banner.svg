@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="340" viewBox="0 0 1200 340" role="img" aria-label="刷题 · 把 Excel 题库变成离线刷题工具">
+  <!-- 卡片底 -->
+  <rect x="6" y="6" width="1188" height="328" rx="30" fill="#f5f0e8" stroke="#e3d8c6" stroke-width="2"/>
+
+  <!-- 应用图标 -->
+  <rect x="84" y="80" width="160" height="160" rx="38" fill="#5d3a54"/>
+  <text x="164" y="188" text-anchor="middle" font-family="'Noto Serif SC','Source Han Serif SC','STZhongsong','SimSun',serif" font-weight="700" font-size="88" fill="#fdfaf4">刷</text>
+
+  <!-- 标题与副标题 -->
+  <text x="306" y="152" font-family="'Noto Serif SC','Source Han Serif SC','STZhongsong','SimSun',serif" font-weight="700" font-size="72" fill="#2b2320">刷题</text>
+  <text x="308" y="204" font-family="'PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif" font-size="30" fill="#6f6156">把 Excel 题库，变成离线刷题工具</text>
+
+  <!-- 特性胶囊 -->
+  <g font-family="'PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif" font-size="19" fill="#6f6156">
+    <rect x="308" y="230" width="118" height="38" rx="19" fill="#ece2d1"/>
+    <text x="367" y="256" text-anchor="middle">本地离线</text>
+    <rect x="440" y="230" width="140" height="38" rx="19" fill="#ece2d1"/>
+    <text x="510" y="256" text-anchor="middle">Excel 导入</text>
+    <rect x="594" y="230" width="150" height="38" rx="19" fill="#ece2d1"/>
+    <text x="669" y="256" text-anchor="middle">AI 解析 · 可选</text>
+  </g>
+
+  <!-- 右侧迷你答题卡（呼应真实界面） -->
+  <g>
+    <rect x="872" y="78" width="240" height="186" rx="18" fill="#fffdfa" stroke="#e3d8c6" stroke-width="2"/>
+    <!-- 第 1 行：已答对 -->
+    <circle cx="912" cy="121" r="14" fill="#5d3a54"/>
+    <text x="912" y="127" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="14" font-weight="700" fill="#fdfaf4">A</text>
+    <rect x="938" y="106" width="150" height="30" rx="15" fill="#e0ead9"/>
+    <!-- 第 2 行 -->
+    <circle cx="912" cy="171" r="14" fill="none" stroke="#c9bca9" stroke-width="2"/>
+    <text x="912" y="177" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="14" fill="#8a7968">B</text>
+    <rect x="938" y="156" width="150" height="30" rx="15" fill="#f0e9dc"/>
+    <!-- 第 3 行 -->
+    <circle cx="912" cy="221" r="14" fill="none" stroke="#c9bca9" stroke-width="2"/>
+    <text x="912" y="227" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="14" fill="#8a7968">C</text>
+    <rect x="938" y="206" width="150" height="30" rx="15" fill="#f0e9dc"/>
+  </g>
+</svg>

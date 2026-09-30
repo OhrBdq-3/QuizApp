@@ -204,11 +204,15 @@ class RoundedFrame(tk.Frame):
             pass
 
     def apply_palette(self, palette):
-        """换主题：底色/描边由 config 递归更新，这里补外圈底色。"""
+        """换主题：底色/描边由 config 递归更新，这里补外圈底色。
+
+        必须显式重设一次 *self._bg / _border 对应的填充：Canvas 的 bg 是画布
+        底色、图元 fill 是独立项，_recolor_widget_tree 改 bg 时图元纹丝不动
+        （已验证：canvas.configure(bg=…) 不改 create_polygon 的 fill）。所以
+        圆角块永远停在初始色上，透明/继承式传色在这里会变成"写死色"。
+        """
         try:
             self.set_colors(outer=_bg_of(self.master))
-            self._canvas.itemconfig(self._shape, fill=self._bg,
-                                    outline=self._border)
         except tk.TclError:
             pass
 
